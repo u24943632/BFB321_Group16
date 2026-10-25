@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scan &amp; update · Simply Garlic Tracker</title>
+  <meta name="description" content="Scan a box QR code and move it to its next stage.">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header id="sg-nav"></header>
+
+  <main id="main" class="container-xxl" tabindex="-1">
+    <div class="sg-page-header">
+      <h1>Scan &amp; update</h1>
+      <p>Scan the box label, then the station's location tag, and confirm the next stage.</p>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div id="readonly-notice" class="alert alert-info d-none" role="note">
+          <i class="bi bi-eye" aria-hidden="true"></i> Your role is read-only. You can look up a box but not change it.
+        </div>
+
+        <form class="card" id="lookup-form" novalidate aria-labelledby="lookup-heading">
+          <div class="card-body">
+            <h2 id="lookup-heading" class="h3">1. Identify the box</h2>
+            <label class="form-label required" for="scan-id">Box ID</label>
+            <div class="input-group has-validation">
+              <span class="input-group-text"><i class="bi bi-qr-code" aria-hidden="true"></i></span>
+              <input class="form-control sg-scan-input mono" id="scan-id" required autocomplete="off"
+                     autocapitalize="characters" spellcheck="false" inputmode="text"
+                     placeholder="SG-BGA-261025-0007-K"
+                     aria-describedby="scan-id-error">
+              <button class="btn btn-primary" type="submit">Look up</button>
+              <div class="invalid-feedback" id="scan-id-error"></div>
+            </div>
+          </div>
+        </form>
+
+        <form class="card mt-4 d-none" id="move-form" novalidate aria-labelledby="move-heading">
+          <div class="card-body">
+            <h2 id="move-heading" class="h3">2. Update stage</h2>
+            <div id="box-status" class="mb-3"></div>
+
+            <fieldset class="mb-3" id="stage-fieldset" aria-describedby="stage-error">
+              <legend class="form-label required fs-6">Move to</legend>
+              <div id="stage-options" class="d-grid gap-2 sg-stage-choice"></div>
+              <div class="invalid-feedback d-block" id="stage-error"></div>
+            </fieldset>
+
+            <div class="row g-3">
+              <div class="col-sm-7">
+                <label class="form-label required" for="scan-loc">Location</label>
+                <select class="form-select" id="scan-loc" required aria-describedby="scan-loc-help scan-loc-error"></select>
+                <div id="scan-loc-help" class="form-text">Scan the station's location tag or choose it.</div>
+                <div class="invalid-feedback" id="scan-loc-error"></div>
+              </div>
+              <div class="col-sm-5">
+                <label class="form-label" for="scan-method">Captured by</label>
+                <select class="form-select" id="scan-method" aria-describedby="scan-method-help">
+                  <option value="scan">QR scan</option>
+                  <option value="manual">Typed manually</option>
+                </select>
+                <div id="scan-method-help" class="form-text">Used for scan-compliance reporting.</div>
+              </div>
+              <div class="col-12">
+                <label class="form-label" id="scan-note-label" for="scan-note">Note</label>
+                <textarea class="form-control" id="scan-note" rows="2" maxlength="300"
+                          aria-describedby="scan-note-help scan-note-error"></textarea>
+                <div id="scan-note-help" class="form-text">Required when placing a box on hold or rejecting it.</div>
+                <div class="invalid-feedback" id="scan-note-error"></div>
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-check2-circle" aria-hidden="true"></i> Confirm move</button>
+              <button class="btn btn-outline-secondary btn-lg" type="button" id="scan-next">Scan another box</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <aside class="col-lg-5" aria-labelledby="recent-heading">
+        <div class="card">
+          <div class="card-header"><h2 id="recent-heading" class="h3 mb-0">Your recent updates</h2></div>
+          <ul class="list-group list-group-flush" id="recent"><li class="list-group-item text-muted">Nothing yet this session.</li></ul>
+        </div>
+        <div class="card mt-4">
+          <div class="card-body small">
+            <h2 class="h6">Process rules</h2>
+            <ul class="mb-0 ps-3">
+              <li>Boxes follow: In production → Awaiting quality control → Quality control complete → Packaging complete → Ready for dispatch → Dispatched.</li>
+              <li>Only quality control inspectors and supervisors can sign off quality control.</li>
+              <li>Anyone on the floor can put a box on hold; only supervisors release or reject it.</li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <noscript><div class="container alert alert-warning mt-3">This tracker needs JavaScript enabled.</div></noscript>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/components.js"></script>
+  <script src="assets/js/pages/scan.js"></script>
+</body>
+</html>
