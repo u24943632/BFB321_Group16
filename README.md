@@ -3,6 +3,11 @@
 A web-based inventory tracking system for Simply Garlic, a South African
 vegetable-based product manufacturer. Simply Garlic's Derdepoort facility relies on a manual, paper-based labelling system with no digital record or time-based trail, causing misplaced labels and a loss of production time, which increases the risks of delayed deliveries to clients. This solution gives each box its own ID and follows through production stages while raising alerts when a box stays in a stage too long. It also reports before/after process KPIs and reorder recommendations. Demo data is used to give an idea of how this project may look in practise. 
 
+This was a collaborative effort of group 16:
+Grace Lushamba - u23531152
+Marcello Schmidt- u23563789
+Migal Groenewald – u24943632
+
 ## Run it locally
 
 Requires Python 3.10+. There are no packages to install. Node.js is optional
