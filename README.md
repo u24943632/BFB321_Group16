@@ -1,18 +1,7 @@
 # Simply Garlic box tracker
 
 A web-based inventory tracking system for Simply Garlic, a South African
-vegetable-based product manufacturer. It gives each box its own ID and follows
-it from production through QC, packaging and dispatch, raising alerts when a
-box stays in a stage too long. It also reports before/after process KPIs and
-reorder recommendations.
-
-- **Step 1: Frontend** (`web/`): responsive Bootstrap 5 pages for phones,
-  tablets and laptops, with accessible forms and tables and reusable components.
-- **Step 2: Supply-chain model** (`models/`): standalone Python with no
-  framework and no database, covered by unit tests.
-
-Process rules (thresholds, access, QR handling, audit, location, evaluation
-method) are in [`docs/PROCESS_RULES.md`](docs/PROCESS_RULES.md).
+vegetable-based product manufacturer. Simply Garlic's Derdepoort facility relies on a manual, paper-based labelling system with no digital record or time-based trail, causing misplaced labels and a loss of production time, which increases the risks of delayed deliveries to clients. This solution gives each box its own ID and follows through production stages while raising alerts when a box stays in a stage too long. It also reports before/after process KPIs and reorder recommendations. Demo data is used to give an idea of how this project may look in practise. 
 
 ## Run it locally
 
@@ -30,13 +19,7 @@ python3 scripts/build_demo_data.py
 python3 -m http.server 8000 -d web
 ```
 
-Opening `web/index.html` directly from disk also works. The pages load
-Bootstrap from a CDN, so they need an internet connection.
-
-Use **Signed in as** in the navbar to switch roles (operator, QC inspector,
-supervisor, executive) and see the access rules apply. Changes made in the
-demo are saved in your browser. Use **Reset demo data** in the footer to
-start again.
+An internet connection is needed to load the assets used for the bootstrap. All changes made in the application are only local and will be reset after each new running of the application.
 
 ## Project layout
 
@@ -64,11 +47,3 @@ web/
   assets/js/store.js         applies the generated rules in the browser
 docs/PROCESS_RULES.md
 ```
-
-## Notes
-
-- **All data is sample data.** The baseline KPIs and EOQ inputs in
-  `scripts/build_demo_data.py` are placeholders, and the "after" figures
-  come from a simulation. Replace them with measured figures before evaluation.
-- The model never imports Flask or a database. A future API layer can wrap
-  `BoxTracker` and persist its records without changing the rules.
