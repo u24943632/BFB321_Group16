@@ -19,8 +19,10 @@ This module is the single source of truth for the process rules:
 * **Audit trail** - every action, including rejected attempts, is written to a
   hash-chained :class:`AuditLog` so tampering is detectable.
 
-It is deliberately framework-free (no Flask, no database). An API or
-persistence layer can wrap :class:`BoxTracker` later without changing the rules.
+It is deliberately framework-free (no Flask, no database). The MySQL layer
+(:mod:`models.repository` and :mod:`services.tracker_service`) loads saved
+records with :meth:`BoxTracker.restore`, runs one command and stores what
+changed, so the rules live in one place.
 All timestamps must be timezone-aware; the default clock uses SAST (UTC+2).
 """
 
@@ -38,11 +40,6 @@ from typing import Callable, Iterator, Optional
 from .products import get_product
 
 SAST = timezone(timedelta(hours=2), "SAST")
-
-
-# --------------------------------------------------------------------------
-# Errors
-# --------------------------------------------------------------------------
 
 class TrackingError(Exception):
     """Base class for all tracking rule violations."""
@@ -74,10 +71,6 @@ class InvalidTransitionError(TrackingError):
 class PermissionDeniedError(TrackingError):
     """The user's role may not perform this action."""
 
-
-# --------------------------------------------------------------------------
-# Stages, transitions and roles
-# --------------------------------------------------------------------------
 
 class Stage(str, Enum):
     IN_PRODUCTION = "in_production"
@@ -117,9 +110,7 @@ MAIN_FLOW: tuple[Stage, ...] = (
 
 TERMINAL_STAGES = frozenset({Stage.DISPATCHED, Stage.REJECTED})
 
-#: Graph of permitted moves. Any working stage can be put ON_HOLD (QC failure,
-#: damage, investigation). Releases from hold are further limited by
-#: :func:`validate_transition` to the held-from stage or earlier.
+
 ALLOWED_TRANSITIONS: dict[Stage, frozenset[Stage]] = {
     Stage.IN_PRODUCTION: frozenset({Stage.AWAITING_QC, Stage.ON_HOLD}),
     Stage.AWAITING_QC: frozenset({Stage.QC_COMPLETE, Stage.ON_HOLD}),
@@ -131,9 +122,7 @@ ALLOWED_TRANSITIONS: dict[Stage, frozenset[Stage]] = {
     Stage.REJECTED: frozenset(),
 }
 
-#: Stages that must have been reached in the current cycle before entering
-#: the key stage. A cycle restarts when a box re-enters production (rework)
-#: or awaiting QC (re-inspection).
+
 PREREQUISITES: dict[Stage, tuple[Stage, ...]] = {
     Stage.QC_COMPLETE: (Stage.AWAITING_QC,),
     Stage.PACKAGING_COMPLETE: (Stage.QC_COMPLETE,),
@@ -155,10 +144,10 @@ class Role(str, Enum):
         return self.value.replace("_", " ").title().replace("Qc", "QC")
 
 
-#: Roles that work on the floor and may write. Executives are read-only.
+
 FLOOR_ROLES = frozenset({Role.OPERATOR, Role.QC_INSPECTOR, Role.SUPERVISOR})
 
-#: Who may move a box *into* each stage (for moves not starting from ON_HOLD).
+
 TRANSITION_ROLES: dict[Stage, frozenset[Role]] = {
     Stage.IN_PRODUCTION: frozenset({Role.SUPERVISOR}),
     Stage.AWAITING_QC: frozenset({Role.OPERATOR, Role.QC_INSPECTOR, Role.SUPERVISOR}),
@@ -170,24 +159,16 @@ TRANSITION_ROLES: dict[Stage, frozenset[Role]] = {
     Stage.REJECTED: frozenset({Role.SUPERVISOR}),
 }
 
-#: Only supervisors may release a box from hold (or reject it).
+
 HOLD_RELEASE_ROLES = frozenset({Role.SUPERVISOR})
 
 REGISTER_ROLES = frozenset({Role.OPERATOR, Role.SUPERVISOR})
 REPRINT_ROLES = frozenset({Role.OPERATOR, Role.SUPERVISOR})
 
-#: Stages that require a written reason.
+
 NOTE_REQUIRED_STAGES = frozenset({Stage.ON_HOLD, Stage.REJECTED})
 
 
-# --------------------------------------------------------------------------
-# Physical locations
-# --------------------------------------------------------------------------
-
-#: One standard location per stage keeps the process uniform. Every station
-#: has a fixed location QR tag. Location is captured by scanning
-#: that tag with the box, so "location" means *last confirmed scan location*,
-#: never an inferred position.
 LOCATIONS: dict[str, str] = {
     "PROD": "Production",
     "QC-STAGE": "QC staging rack",
@@ -210,11 +191,6 @@ STAGE_DEFAULT_LOCATIONS: dict[Stage, tuple[str, ...]] = {
     Stage.ON_HOLD: ("QUARANTINE",),
     Stage.REJECTED: ("WASTE",),
 }
-
-
-# --------------------------------------------------------------------------
-# Box IDs
-# --------------------------------------------------------------------------
 
 _ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 BOX_ID_PATTERN = re.compile(r"^SG-([A-Z]{3})-(\d{6})-(\d{4})-([0-9A-Z])$")
@@ -294,10 +270,6 @@ def parse_box_id(raw: str) -> BoxId:
     return BoxId(sku, production_date, int(seq))
 
 
-# --------------------------------------------------------------------------
-# Records
-# --------------------------------------------------------------------------
-
 class CaptureMethod(str, Enum):
     SCAN = "scan"      # QR scanned at a station: counts towards scan compliance
     MANUAL = "manual"  # typed / selected by hand
@@ -312,6 +284,7 @@ class User:
         if not self.username.strip():
             raise ValidationError("Username is required.")
         object.__setattr__(self, "role", Role(self.role))
+
 
 
 @dataclass(frozen=True)
@@ -457,9 +430,7 @@ class Incident:
         return None if self.closed_at is None else self.closed_at - self.opened_at
 
 
-# --------------------------------------------------------------------------
-# Audit trail
-# --------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class AuditEntry:
@@ -523,6 +494,16 @@ class AuditLog:
             prev = entry.hash
         return True
 
+    @classmethod
+    def from_entries(cls, entries: list[AuditEntry]) -> "AuditLog":
+        """Rebuild a log from stored entries (e.g. loaded from MySQL), oldest first.
+
+        The chain is not re-verified here; call :meth:`verify` to check it.
+        """
+        log = cls()
+        log._entries = sorted(entries, key=lambda e: e.seq)
+        return log
+
     def for_box(self, box_id: str) -> list[AuditEntry]:
         return [e for e in self._entries if e.box_id == box_id]
 
@@ -533,9 +514,6 @@ class AuditLog:
         return len(self._entries)
 
 
-# --------------------------------------------------------------------------
-# Rules
-# --------------------------------------------------------------------------
 
 def validate_transition(box: Box, to_stage: Stage, role: Role) -> None:
     """Raise if ``role`` may not move ``box`` to ``to_stage``; return None if OK.
@@ -588,10 +566,6 @@ def next_stages(box: Box, role: Role) -> list[Stage]:
     return options
 
 
-# --------------------------------------------------------------------------
-# Tracker
-# --------------------------------------------------------------------------
-
 class ScanOutcome(str, Enum):
     ACCEPTED = "accepted"
     DUPLICATE_IGNORED = "duplicate_ignored"
@@ -634,7 +608,24 @@ class BoxTracker:
         self._incidents: dict[str, Incident] = {}
         self.audit = AuditLog()
 
-    # -- helpers -----------------------------------------------------------
+   
+
+    def restore(self, boxes: list[Box], incidents: list[Incident],
+                audit_entries: list[AuditEntry]) -> None:
+        """Load previously saved records (e.g. from MySQL) into this empty tracker.
+
+        Daily box sequences are recovered from the box IDs so the next
+        registration continues the numbering instead of reusing an ID.
+        """
+        if self._boxes or self._incidents or len(self.audit):
+            raise TrackingError("restore() can only be used on an empty tracker.")
+        for box in boxes:
+            self._boxes[box.box_id] = box
+            parsed = parse_box_id(box.box_id)
+            key = (parsed.sku, parsed.production_date)
+            self._sequences[key] = max(self._sequences[key], parsed.sequence)
+        self._incidents = {i.incident_id: i for i in incidents}
+        self.audit = AuditLog.from_entries(audit_entries)
 
     def _now(self, at: Optional[datetime]) -> datetime:
         at = at or self._clock()
@@ -657,8 +648,7 @@ class BoxTracker:
                 f"Unknown location '{location}'. Scan the station's location tag.")
         return code
 
-    # -- queries -----------------------------------------------------------
-
+    
     @property
     def boxes(self) -> list[Box]:
         return list(self._boxes.values())
@@ -681,7 +671,7 @@ class BoxTracker:
     def open_incidents(self) -> list[Incident]:
         return [i for i in self._incidents.values() if i.is_open]
 
-    # -- commands ----------------------------------------------------------
+   
 
     def register_box(self, sku: str, batch_no: str, quantity: int, user: User,
                      location: str, *, at: Optional[datetime] = None,

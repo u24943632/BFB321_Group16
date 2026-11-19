@@ -115,7 +115,7 @@ def reorder_point(average_daily_demand: float, lead_time_days: float,
     return average_daily_demand * lead_time_days + safety_stock_units
 
 
-#: Badge statuses, most urgent last.
+
 STATUS_OK = "OK"
 STATUS_REORDER = "REORDER"
 STATUS_CRITICAL = "CRITICAL"

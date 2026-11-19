@@ -124,8 +124,8 @@ class KpiComparison:
     kpi: KpiDefinition
     baseline: float
     current: float
-    change_pct: Optional[float]       # raw % change; None if baseline is 0
-    improvement_pct: Optional[float]  # positive = better, whichever direction is good
+    change_pct: Optional[float]       
+    improvement_pct: Optional[float]  
 
     @property
     def improved(self) -> bool:
