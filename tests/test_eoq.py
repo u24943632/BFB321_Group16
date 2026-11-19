@@ -8,11 +8,11 @@ from models import eoq
 
 class CalculateEoqTests(unittest.TestCase):
     def test_textbook_example(self):
-        # sqrt(2 * 1000 * 100 / 5) = sqrt(40 000) = 200
+        
         self.assertAlmostEqual(eoq.calculate_eoq(1000, 100, 5), 200.0)
 
     def test_non_round_result(self):
-        # sqrt(2 * 12 000 * 450 / 18) = sqrt(600 000) = 774.5967
+        
         self.assertAlmostEqual(eoq.calculate_eoq(12_000, 450, 18), 774.5967, places=4)
 
     def test_rejects_zero_or_negative_inputs(self):
@@ -26,11 +26,11 @@ class OrdersAndCostTests(unittest.TestCase):
         self.assertAlmostEqual(eoq.orders_per_year(1000, 200), 5.0)
 
     def test_total_cost_at_eoq_has_equal_ordering_and_holding(self):
-        # ordering = 5 * 100 = 500; holding = 100 * 5 = 500 -> 1000
+        
         self.assertAlmostEqual(eoq.total_annual_cost(1000, 200, 100, 5), 1000.0)
 
     def test_total_cost_includes_purchase_cost(self):
-        # 1000 + 1000 units * R12 = 13 000
+        
         self.assertAlmostEqual(eoq.total_annual_cost(1000, 200, 100, 5, unit_cost=12), 13_000.0)
 
     def test_eoq_minimises_cost(self):
@@ -56,14 +56,14 @@ class SafetyStockAndRopTests(unittest.TestCase):
                 eoq.z_score(level)
 
     def test_safety_stock(self):
-        # 1.6449 * 10 * sqrt(4) = 32.897
+        
         self.assertAlmostEqual(eoq.safety_stock(10, 4, 0.95), 32.897, places=3)
 
     def test_zero_variability_means_no_safety_stock(self):
         self.assertEqual(eoq.safety_stock(0, 4), 0.0)
 
     def test_reorder_point(self):
-        # 50/day * 4 days + 32.9 = 232.9
+        
         self.assertAlmostEqual(eoq.reorder_point(50, 4, 32.9), 232.9)
 
     def test_stock_status(self):
@@ -77,7 +77,7 @@ class PlanReorderTests(unittest.TestCase):
         plan = eoq.plan_reorder("BGA", annual_demand=12_500, order_cost=100, holding_cost=5,
                                 daily_demand_std=10, lead_time_days=4, on_hand=150,
                                 working_days=250)
-        self.assertAlmostEqual(plan.eoq, math.sqrt(2 * 12_500 * 100 / 5))   # 707.1
+        self.assertAlmostEqual(plan.eoq, math.sqrt(2 * 12_500 * 100 / 5))   
         self.assertAlmostEqual(plan.safety_stock, 32.897, places=3)
         self.assertAlmostEqual(plan.reorder_point, 50 * 4 + plan.safety_stock)
         self.assertEqual(plan.status, eoq.STATUS_REORDER)

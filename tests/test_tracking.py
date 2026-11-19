@@ -30,7 +30,7 @@ class BoxIdTests(unittest.TestCase):
 
     def test_every_single_character_error_is_detected(self):
         box_id = make_box_id("PON", date(2026, 10, 25), 42)
-        payload_positions = [i for i, ch in enumerate(box_id) if ch != "-"][2:]  # skip "SG"
+        payload_positions = [i for i, ch in enumerate(box_id) if ch != "-"][2:]  
         for pos in payload_positions:
             for replacement in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ":
                 if replacement == box_id[pos]:
@@ -41,7 +41,7 @@ class BoxIdTests(unittest.TestCase):
                         parse_box_id(corrupted)
 
     def test_adjacent_digit_transposition_detected(self):
-        box_id = make_box_id("DGA", date(2026, 10, 25), 12)   # ...-0012-X
+        box_id = make_box_id("DGA", date(2026, 10, 25), 12)   
         swapped = box_id.replace("0012", "0021")
         with self.assertRaises(DamagedLabelError):
             parse_box_id(swapped)
@@ -171,11 +171,11 @@ class TransitionTests(unittest.TestCase):
         self.clock.advance(minutes=10)
         self.tracker.move(box.box_id, Stage.ON_HOLD, QC, "QUARANTINE", note="Seal failure")
         self.assertIs(box.held_from, Stage.AWAITING_QC)
-        # QC failure cannot be released straight to QC complete or beyond
+        
         for target in (Stage.QC_COMPLETE, Stage.READY_FOR_DISPATCH):
             with self.subTest(target=target), self.assertRaises(InvalidTransitionError):
                 self.tracker.move(box.box_id, target, SUPERVISOR, "QC-BAY")
-        # operators cannot release a hold
+        
         with self.assertRaises(PermissionDeniedError):
             self.tracker.move(box.box_id, Stage.AWAITING_QC, OPERATOR, "QC-STAGE")
         self.assertEqual(next_stages(box, Role.SUPERVISOR),
@@ -224,7 +224,7 @@ class TransitionTests(unittest.TestCase):
 
     def test_broken_history_is_not_a_complete_trace(self):
         box = box_at_stage(self.tracker, self.clock, MAIN_FLOW[1:])
-        del box.history[2]   # e.g. a paper record lost the QC sign-off
+        del box.history[2]   
         self.assertFalse(box.has_complete_trace())
 
 
@@ -330,7 +330,7 @@ class IncidentAndLabelTests(unittest.TestCase):
         self.tracker.link_incident(incident.incident_id, self.box.box_id.lower(), OPERATOR)
         self.assertEqual(incident.box_id, self.box.box_id)
         self.assertEqual(self.tracker.audit.for_box(self.box.box_id)[-1].action, "INCIDENT_LINK")
-        with self.assertRaises(ValidationError):   # cannot re-link
+        with self.assertRaises(ValidationError):   
             self.tracker.link_incident(incident.incident_id, self.box.box_id, OPERATOR)
 
     def test_reprint_increments_label_version(self):

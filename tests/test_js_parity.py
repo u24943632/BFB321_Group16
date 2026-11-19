@@ -1,6 +1,7 @@
-"""The browser store (web/assets/js/store.js) must apply the same rules as Python.
+"""The browser store (static/js/store.js) must apply the same rules as Python.
 
-Runs store.js in Node with the generated rule data and compares its
+Runs store.js in Node with the rule data the seed writes to MySQL (built here
+from the same Python constants, so no database is needed) and compares its
 next-stage options and box-ID checks against models.tracking for every
 stage/role combination. Skipped when Node is not installed.
 """
@@ -8,18 +9,17 @@ stage/role combination. Skipped when Node is not installed.
 import json
 import shutil
 import subprocess
-import sys
 import unittest
 from datetime import date
 from pathlib import Path
 
 from models.tracking import (
-    MAIN_FLOW, Role, Stage, make_box_id, next_stages, parse_box_id, InvalidBoxIdError,
+    ALLOWED_TRANSITIONS, HOLD_RELEASE_ROLES, MAIN_FLOW, PREREQUISITES, TERMINAL_STAGES,
+    TRANSITION_ROLES, InvalidBoxIdError, Role, Stage, make_box_id, next_stages, parse_box_id,
 )
 from tests.helpers import box_at_stage, make_tracker, QC, SUPERVISOR
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "scripts"))
 
 NODE = shutil.which("node")
 
@@ -40,6 +40,25 @@ process.stdout.write(JSON.stringify(out));
 """
 
 
+def _rule_data():
+    """The rule fields of window.SG_DATA that store.js reads."""
+    stages = list(MAIN_FLOW) + [Stage.ON_HOLD, Stage.REJECTED]
+    return {
+        "stages": [{"key": s.value, "label": s.label, "terminal": s in TERMINAL_STAGES}
+                   for s in stages],
+        "main_flow": [s.value for s in MAIN_FLOW],
+        "transitions": {s.value: sorted(t.value for t in ALLOWED_TRANSITIONS[s]) for s in Stage},
+        "prerequisites": {s.value: [p.value for p in req] for s, req in PREREQUISITES.items()},
+        "cycle_reset": [Stage.IN_PRODUCTION.value, Stage.AWAITING_QC.value],
+        "transition_roles": {s.value: sorted(r.value for r in roles)
+                             for s, roles in TRANSITION_ROLES.items()},
+        "hold_release_roles": sorted(r.value for r in HOLD_RELEASE_ROLES),
+        "roles": [{"key": r.value, "label": r.label, "user": r.value} for r in Role],
+        "products": [], "locations": [], "incident_kinds": [],
+        "boxes": [], "incidents": [], "audit": [],
+    }
+
+
 def _box_json(box):
     return {"box_id": box.box_id, "sku": box.sku, "history": [
         {"from": e.from_stage.value if e.from_stage else None, "to": e.to_stage.value,
@@ -49,10 +68,7 @@ def _box_json(box):
 @unittest.skipUnless(NODE, "Node.js not installed")
 class JsParityTests(unittest.TestCase):
     def test_rules_and_ids_match_python(self):
-        from build_demo_data import export
-        from models.tracking import SAST
-        from datetime import datetime
-        data = export(datetime(2026, 10, 25, 12, 0, tzinfo=SAST), seed=1)
+        data = _rule_data()
 
         tracker, clock = make_tracker()
         boxes = [box_at_stage(tracker, clock, list(MAIN_FLOW[1:i])) for i in range(1, len(MAIN_FLOW) + 1)]
@@ -68,7 +84,7 @@ class JsParityTests(unittest.TestCase):
         bad = [g[:-1] + ("0" if g[-1] != "0" else "1") for g in good]
         roles = [r.value for r in Role]
 
-        payload = {"data": data, "store": str(ROOT / "web/assets/js/store.js"),
+        payload = {"data": data, "store": str(ROOT / "static/js/store.js"),
                    "boxes": [_box_json(b) for b in boxes], "roles": roles, "ids": good + bad}
         result = subprocess.run([NODE, "-e", HARNESS], input=json.dumps(payload),
                                 capture_output=True, text=True, check=True)

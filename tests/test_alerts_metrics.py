@@ -137,21 +137,23 @@ class TrackerMetricsTests(unittest.TestCase):
         self.assertEqual(snap.investigations, 1)
         self.assertAlmostEqual(snap.investigation_minutes, 12)
         self.assertEqual(snap.dispatch_errors, 1)
-        self.assertAlmostEqual(snap.mean_stage_dwell_hours, 0.5)   # every stay was 30 min
+        self.assertAlmostEqual(snap.mean_stage_dwell_hours, 0.5)   
 
     def test_scan_compliance_and_dwell_by_stage(self):
         tracker, clock = make_tracker()
-        box = box_at_stage(tracker, clock, [])                    # registration not counted
+        box = box_at_stage(tracker, clock, [])                    
         clock.advance(minutes=30)
-        tracker.scan(box.box_id, OPERATOR, "QC-STAGE", Stage.AWAITING_QC)   # scanned
+        tracker.scan(box.box_id, OPERATOR, "QC-STAGE", Stage.AWAITING_QC)   
         clock.advance(minutes=30)
-        tracker.move(box.box_id, Stage.ON_HOLD, OPERATOR, "QUARANTINE", note="x")  # manual
+        tracker.move(box.box_id, Stage.ON_HOLD, OPERATOR, "QUARANTINE", note="x")  
         end = clock.advance(minutes=1)
         self.assertAlmostEqual(scan_compliance_pct(tracker.boxes, START, end), 50)
         dwell = mean_dwell_by_stage(tracker.boxes, START, end)
         self.assertAlmostEqual(dwell[Stage.IN_PRODUCTION], 0.5)
         self.assertAlmostEqual(dwell[Stage.AWAITING_QC], 0.5)
-        self.assertNotIn(Stage.ON_HOLD, dwell)   # still open
+        self.assertNotIn(Stage.ON_HOLD, dwell)   
+
+
 
 
 if __name__ == "__main__":
