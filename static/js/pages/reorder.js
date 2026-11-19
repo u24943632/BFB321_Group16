@@ -5,7 +5,7 @@
   const rand = (v) => `R ${num(v)}`;
   const STATUS_RANK = { OK: 0, REORDER: 1, CRITICAL: 2 };
 
-  SGUI.navbar('reorder.html');
+  SGUI.navbar('/reorder');
 
   SGUI.sortableTable($('plan-table'), {
     caption: 'Products at or below their reorder point are flagged. Select a heading to sort.',

@@ -4,7 +4,7 @@
   const $ = (id) => document.getElementById(id);
   const K = SG.data.kpis;
 
-  SGUI.navbar('metrics.html');
+  SGUI.navbar('/metrics');
 
   const dec = (value, digits = 1) => Number(value).toLocaleString('en-ZA', { maximumFractionDigits: digits, minimumFractionDigits: digits });
   const fmt = (value, unit) => `${dec(value, unit === 's' || unit === 'boxes/day' ? 0 : 1)} ${unit}`;

@@ -2,7 +2,7 @@
   'use strict';
   const { escapeHtml: esc } = SGUI;
 
-  SGUI.navbar('index.html');
+  SGUI.navbar('/');
 
   function render() {
     const now = Date.now();
@@ -40,7 +40,7 @@
             <p class="count mb-0">${inStage.length}<span class="visually-hidden"> boxes</span></p>
             <p class="small text-muted mb-2">Avg ${inStage.length ? esc(SG.formatDuration(avg)) : '-'} in stage
               ${late ? `<br><strong class="text-danger">${late} over limit</strong>` : ''}</p>
-            <a class="small" href="boxes.html?stage=${stage}">View<span class="visually-hidden"> ${esc(SG.stageLabel(stage))} boxes</span></a>
+            <a class="small" href="/boxes?stage=${stage}">View<span class="visually-hidden"> ${esc(SG.stageLabel(stage))} boxes</span></a>
           </div>
         </div>`;
     }).join('');
@@ -52,7 +52,7 @@
             <strong>${esc(SG.incidentKindMap[i.kind])}</strong>
             <span class="small text-muted">${esc(SG.formatDuration(now - Date.parse(i.opened_at)))} open</span>
           </div>
-          ${i.box_id ? `<a class="mono small" href="boxes.html?box=${encodeURIComponent(i.box_id)}">${esc(i.box_id)}</a>` : ''}
+          ${i.box_id ? `<a class="mono small" href="/boxes?box=${encodeURIComponent(i.box_id)}">${esc(i.box_id)}</a>` : ''}
           <div class="small text-muted">${esc(i.note)}</div>
         </li>`).join('')
       : '<li class="list-group-item text-muted">No open investigations.</li>';

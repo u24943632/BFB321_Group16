@@ -1,19 +1,19 @@
-/* Simply Garlic tracker - design tokens + components on top of Bootstrap 5.3 */
+
 
 :root {
-  /* Brand */
-  --sg-brand: #4a2c5a;          /* black-garlic aubergine */
+  
+  --sg-brand: #4a2c5a;          
   --sg-brand-rgb: 74, 44, 90;
   --sg-brand-dark: #331d3f;
-  --sg-accent: #e9dfc7;         /* garlic skin cream */
+  --sg-accent: #e9dfc7;         
   --sg-surface: #f7f5f0;
   --sg-surface-card: #ffffff;
   --sg-border: #ddd6c8;
   --sg-text: #1f1a17;
-  --sg-text-muted: #5c5550;     /* 7:1 on white */
+  --sg-text-muted: #5c5550;     
   --sg-focus: #1d4ed8;
 
-  /* Type scale (1.2 minor third) */
+  
   --sg-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --sg-text-xs: 0.8125rem;
   --sg-text-sm: 0.875rem;
@@ -22,7 +22,6 @@
   --sg-text-xl: 1.44rem;
   --sg-text-2xl: 1.728rem;
 
-  /* Spacing scale (4px base) */
   --sg-space-1: 0.25rem;
   --sg-space-2: 0.5rem;
   --sg-space-3: 0.75rem;
@@ -31,7 +30,6 @@
   --sg-space-6: 2rem;
   --sg-radius: 0.5rem;
 
-  /* Stage colours - all pass 4.5:1 with white text */
   --sg-stage-in_production: #475569;
   --sg-stage-awaiting_qc: #9a4a06;
   --sg-stage-qc_complete: #0e6377;
@@ -41,7 +39,6 @@
   --sg-stage-on_hold: #b91c1c;
   --sg-stage-rejected: #3f3f46;
 
-  /* Bootstrap overrides */
   --bs-primary: var(--sg-brand);
   --bs-primary-rgb: var(--sg-brand-rgb);
   --bs-body-font-family: var(--sg-font);
@@ -67,7 +64,6 @@ h3, .h3 { font-size: var(--sg-text-lg); font-weight: 650; }
 .text-muted, .form-text { color: var(--sg-text-muted) !important; }
 .small, small { font-size: var(--sg-text-sm); }
 
-/* Visible focus for keyboard users everywhere */
 :focus-visible {
   outline: 3px solid var(--sg-focus) !important;
   outline-offset: 2px;
@@ -87,7 +83,6 @@ h3, .h3 { font-size: var(--sg-text-lg); font-weight: 650; }
 }
 .skip-link:focus { top: var(--sg-space-2); }
 
-/* Buttons */
 .btn-primary {
   --bs-btn-bg: var(--sg-brand);
   --bs-btn-border-color: var(--sg-brand);
@@ -105,11 +100,10 @@ h3, .h3 { font-size: var(--sg-text-lg); font-weight: 650; }
   --bs-btn-hover-border-color: var(--sg-brand);
   --bs-btn-active-bg: var(--sg-brand-dark);
 }
-/* Comfortable touch targets for gloved hands on the floor */
 .btn, .form-control, .form-select { min-height: 44px; }
 .btn-sm { min-height: 36px; }
 
-/* Navbar */
+
 .sg-navbar { background: var(--sg-brand); }
 .sg-navbar .navbar-brand { font-weight: 700; letter-spacing: 0.01em; }
 .sg-navbar .nav-link { color: rgba(255, 255, 255, 0.88); padding: var(--sg-space-2) var(--sg-space-3); border-radius: var(--sg-radius); }
@@ -117,11 +111,11 @@ h3, .h3 { font-size: var(--sg-text-lg); font-weight: 650; }
 .sg-navbar .nav-link.active { color: var(--sg-brand); background: var(--sg-accent); font-weight: 600; }
 .sg-navbar .form-select { min-height: 38px; font-size: var(--sg-text-sm); }
 
-/* Page header */
+
 .sg-page-header { padding: var(--sg-space-5) 0 var(--sg-space-4); }
 .sg-page-header p { margin: 0; color: var(--sg-text-muted); }
 
-/* Cards */
+
 .card { border-color: var(--sg-border); border-radius: var(--sg-radius); background: var(--sg-surface-card); }
 .card-header { background: transparent; border-bottom-color: var(--sg-border); font-weight: 600; }
 
@@ -139,12 +133,12 @@ h3, .h3 { font-size: var(--sg-text-lg); font-weight: 650; }
 .sg-kpi-value { font-size: var(--sg-text-2xl); font-weight: 700; line-height: 1.2; margin: 0; font-variant-numeric: tabular-nums; }
 .sg-kpi-sub { font-size: var(--sg-text-xs); color: var(--sg-text-muted); margin: 0; }
 
-/* Stage pipeline */
+
 .sg-pipeline { display: grid; gap: var(--sg-space-3); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .sg-stage-card { border-top: 4px solid var(--stage-color, var(--sg-brand)); }
 .sg-stage-card .count { font-size: var(--sg-text-2xl); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* Badges: always icon + text so colour is never the only signal */
+
 .sg-badge {
   display: inline-flex; align-items: center; gap: 0.35em;
   font-size: var(--sg-text-xs); font-weight: 600; line-height: 1.2;
@@ -165,8 +159,7 @@ h3, .h3 { font-size: var(--sg-text-lg); font-weight: 650; }
 .stock-REORDER { background: #fef3c7; color: #78350f; }
 .stock-CRITICAL { background: #b91c1c; color: #fff; }
 
-/* Tables */
-/* position: relative keeps visually-hidden cell text inside the scroll box on phones */
+
 .table-responsive { position: relative; }
 .table { --bs-table-bg: transparent; font-size: var(--sg-text-sm); margin-bottom: 0; }
 .table > caption { caption-side: top; color: var(--sg-text-muted); padding: 0 0 var(--sg-space-2); }
@@ -184,7 +177,7 @@ th[aria-sort="descending"] .sg-sort-btn .bi { opacity: 1; }
 tr.row-critical { box-shadow: inset 4px 0 0 #b91c1c; }
 tr.row-warning { box-shadow: inset 4px 0 0 #d97706; }
 
-/* History timeline */
+
 .sg-timeline { list-style: none; padding: 0; margin: 0; }
 .sg-timeline li {
   position: relative; padding: 0 0 var(--sg-space-4) var(--sg-space-5);
@@ -196,19 +189,19 @@ tr.row-warning { box-shadow: inset 4px 0 0 #d97706; }
   width: 12px; height: 12px; border-radius: 50%; background: var(--sg-brand);
 }
 
-/* Forms */
+
 .form-label { font-weight: 600; }
 .required::after { content: " *"; color: #b91c1c; }
 .sg-scan-input { font-size: var(--sg-text-lg); letter-spacing: 0.04em; text-transform: uppercase; }
 .sg-stage-choice .btn { text-align: left; }
 
-/* Before / after bars */
+
 .sg-bar { height: 0.6rem; border-radius: 999px; background: #ece7dc; overflow: hidden; }
 .sg-bar > span { display: block; height: 100%; border-radius: 999px; }
 .sg-bar .before { background: #8a8178; }
 .sg-bar .after { background: var(--sg-brand); }
 
-/* Label preview / print */
+
 .sg-label {
   border: 2px dashed var(--sg-border); border-radius: var(--sg-radius);
   padding: var(--sg-space-4); background: #fff; max-width: 22rem;

@@ -3,7 +3,7 @@
   const { escapeHtml: esc } = SGUI;
   const params = new URLSearchParams(window.location.search);
 
-  SGUI.navbar('boxes.html');
+  SGUI.navbar('/boxes');
 
   const $ = (id) => document.getElementById(id);
   const filters = { search: $('f-search'), stage: $('f-stage'), product: $('f-product'), alerts: $('f-alerts'), done: $('f-done') };
@@ -62,7 +62,7 @@
   $('filters').addEventListener('input', refresh);
   $('filters').addEventListener('submit', (e) => { e.preventDefault(); refresh(); });
 
-  // ---- detail modal
+  
   const modalEl = $('box-modal');
   const modal = new bootstrap.Modal(modalEl);
   let currentBoxId = null;
@@ -73,7 +73,7 @@
     const now = Date.now();
     const stage = SG.stageOf(box);
     $('box-modal-title').textContent = box.box_id;
-    $('box-update-link').href = `scan.html?box=${encodeURIComponent(box.box_id)}`;
+    $('box-update-link').href = `/scan?box=${encodeURIComponent(box.box_id)}`;
     $('box-summary').innerHTML = `
       <dl class="row mb-0">
         <dt class="col-sm-4">Product</dt><dd class="col-sm-8">${esc(SG.productMap[box.sku].name)}</dd>
@@ -139,7 +139,7 @@
     if (btn) openBox(btn.dataset.box);
   });
 
-  $('exception-form').addEventListener('submit', (e) => {
+  $('exception-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
     const ok = SGUI.validateForm(form, {
@@ -147,7 +147,7 @@
       'ex-note': (f) => (f.value.trim().length < 10 ? 'Describe what happened in at least 10 characters.' : ''),
     });
     if (!ok) return;
-    const result = SG.openIncident({ kind: $('ex-kind').value, boxId: currentBoxId, note: $('ex-note').value });
+    const result = await SG.openIncident({ kind: $('ex-kind').value, boxId: currentBoxId, note: $('ex-note').value });
     if (!result.ok) { SGUI.toast(result.error, 'danger'); return; }
     form.reset();
     form.querySelectorAll('.is-invalid').forEach((f) => f.classList.remove('is-invalid'));
@@ -156,7 +156,7 @@
     refresh();
   });
 
-  $('box-incidents').addEventListener('submit', (e) => {
+  $('box-incidents').addEventListener('submit', async (e) => {
     const form = e.target.closest('form.close-incident');
     if (!form) return;
     e.preventDefault();
@@ -165,7 +165,7 @@
       [`res-${id}`]: (f) => (f.value.trim().length < 5 ? 'Say how it was resolved (at least 5 characters).' : ''),
     });
     if (!ok) return;
-    const result = SG.closeIncident(id, { resolution: $(`res-${id}`).value, foundLocation: $(`loc-${id}`).value });
+    const result = await SG.closeIncident(id, { resolution: $(`res-${id}`).value, foundLocation: $(`loc-${id}`).value });
     if (!result.ok) { SGUI.toast(result.error, 'danger'); return; }
     SGUI.toast(`${id} closed.`);
     renderModal();

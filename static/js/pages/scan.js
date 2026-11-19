@@ -3,13 +3,13 @@
   const { escapeHtml: esc } = SGUI;
   const $ = (id) => document.getElementById(id);
 
-  SGUI.navbar('scan.html');
+  SGUI.navbar('/scan');
 
   const idInput = $('scan-id');
   const moveForm = $('move-form');
   let box = null;
   const recent = [];
-  // Damaged-label incident waiting for the operator to type the printed ID.
+  
   let pendingIncident = null;
   let lastLoggedText = '';
 
@@ -19,10 +19,10 @@
     $('scan-id-error').textContent = message || '';
   }
 
-  /** Open an incident for a bad scan; read-only roles and repeat presses log nothing. */
-  function logIncident(kind, text, note) {
+  
+  async function logIncident(kind, text, note) {
     if (!SG.canWrite() || text === lastLoggedText) return null;
-    const result = SG.openIncident({ kind, boxId: null, note });
+    const result = await SG.openIncident({ kind, boxId: null, note });
     if (!result.ok) return null;
     lastLoggedText = text;
     return result.incident;
@@ -51,7 +51,7 @@
     $('box-status').innerHTML = `
       <div class="border rounded p-3">
         <div class="d-flex flex-wrap justify-content-between gap-2">
-          <a class="mono fw-semibold" href="boxes.html?box=${encodeURIComponent(box.box_id)}">${esc(box.box_id)}</a>
+          <a class="mono fw-semibold" href="/boxes?box=${encodeURIComponent(box.box_id)}">${esc(box.box_id)}</a>
           ${SGUI.stageBadge(stage)}
         </div>
         <div class="small text-muted mt-1">${esc(SG.productMap[box.sku].name)} · last scanned at ${esc(SG.locationMap[box.location] || box.location)}
@@ -86,17 +86,16 @@
     if (stage) fillLocations(stage);
   }
 
-  $('lookup-form').addEventListener('submit', (e) => {
+  $('lookup-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const raw = idInput.value.trim().toUpperCase();
     const parsed = SG.parseBoxId(raw);
     if (!parsed.ok) {
       let message = parsed.error;
-      // A wrong check character means a damaged or misread label, so log it
-      // (same as the Python model). Format mistakes are just typing hints.
+      
       if (parsed.damaged) {
         message += ' Type the ID printed under the QR code, and ask for a label reprint.';
-        const logged = logIncident('damaged_label', raw, `Unreadable scan: '${raw}'`);
+        const logged = await logIncident('damaged_label', raw, `Unreadable scan: '${raw}'`);
         if (logged) pendingIncident = logged.id;
         if (pendingIncident) message += ` Logged as ${pendingIncident}.`;
       }
@@ -108,7 +107,7 @@
     const found = SG.findBox(parsed.id);
     if (!found) {
       let message = `${parsed.id} is a valid ID but is not registered. Put the box in quarantine and tell a supervisor.`;
-      const logged = logIncident('unknown_label', parsed.id, `Unregistered label ${parsed.id}`);
+      const logged = await logIncident('unknown_label', parsed.id, `Unregistered label ${parsed.id}`);
       if (logged) message += ` Logged as ${logged.id}.`;
       setIdError(message);
       moveForm.classList.add('d-none');
@@ -116,7 +115,7 @@
       return;
     }
     if (pendingIncident) {
-      const linked = SG.linkIncident(pendingIncident, found.box_id);
+      const linked = await SG.linkIncident(pendingIncident, found.box_id);
       if (linked.ok) {
         SGUI.toast(`${pendingIncident} linked to ${found.box_id}. Close it on the box board once the label is reprinted.`, 'info');
       }
@@ -133,7 +132,7 @@
 
   moveForm.addEventListener('change', (e) => { if (e.target.name === 'to-stage') onStageChange(); });
 
-  moveForm.addEventListener('submit', (e) => {
+  moveForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const stage = selectedStage();
     $('stage-error').textContent = stage ? '' : 'Choose the stage this box is moving to.';
@@ -144,7 +143,7 @@
     if (!ok || !stage) return;
 
     const previous = SG.stageOf(box);
-    const result = SG.moveBox(box.box_id, stage, {
+    const result = await SG.moveBox(box.box_id, stage, {
       location: $('scan-loc').value, note: $('scan-note').value, method: $('scan-method').value,
     });
     if (!result.ok) { SGUI.toast(result.error, 'danger'); return; }

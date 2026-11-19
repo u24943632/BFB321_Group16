@@ -3,11 +3,11 @@
   const { escapeHtml: esc } = SGUI;
   const $ = (id) => document.getElementById(id);
 
-  SGUI.navbar('register.html');
+  SGUI.navbar('/register');
 
   SG.data.products.forEach((p) => $('r-sku').insertAdjacentHTML('beforeend',
     `<option value="${p.sku}">${esc(p.name)} (${p.sku})</option>`));
-  // One standard production location: every new box starts there.
+  
   const PRODUCTION = SG.data.stage_locations.in_production[0];
 
   function updateRole() {
@@ -26,7 +26,7 @@
     return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true, alt: `QR code for ${text}`, title: text });
   }
 
-  $('register-form').addEventListener('submit', (e) => {
+  $('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const ok = SGUI.validateForm(e.target, {
       'r-sku': (f) => (f.value ? '' : 'Choose the product in this box.'),
@@ -39,7 +39,7 @@
     });
     if (!ok) return;
 
-    const result = SG.registerBox({
+    const result = await SG.registerBox({
       sku: $('r-sku').value, batch: $('r-batch').value.trim(), quantity: Number($('r-qty').value), location: PRODUCTION,
     });
     if (!result.ok) { SGUI.toast(result.error, 'danger'); return; }
@@ -60,7 +60,7 @@
       </div>
       <div class="d-flex flex-wrap gap-2 mt-3">
         <button type="button" class="btn btn-outline-primary" onclick="window.print()"><i class="bi bi-printer" aria-hidden="true"></i> Print label</button>
-        <a class="btn btn-outline-secondary" href="boxes.html?box=${encodeURIComponent(box.box_id)}">View box</a>
+        <a class="btn btn-outline-secondary" href="/boxes?box=${encodeURIComponent(box.box_id)}">View box</a>
       </div>`;
     SGUI.toast(`Registered ${box.box_id}.`);
     e.target.reset();

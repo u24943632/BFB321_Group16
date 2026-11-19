@@ -1,18 +1,14 @@
-/*
- * Reusable UI components: navbar, cards, badges, sortable table,
- * toasts and screen-reader announcements. Every page uses these, so markup
- * and accessibility behaviour stay consistent.
- */
+
 (function () {
   'use strict';
 
   const PAGES = [
-    { href: 'index.html', label: 'Dashboard', icon: 'speedometer2' },
-    { href: 'boxes.html', label: 'Box board', icon: 'table' },
-    { href: 'scan.html', label: 'Scan & update', icon: 'qr-code-scan' },
-    { href: 'register.html', label: 'Register box', icon: 'plus-square' },
-    { href: 'reorder.html', label: 'Reorder', icon: 'arrow-repeat' },
-    { href: 'metrics.html', label: 'KPIs', icon: 'graph-up-arrow' },
+    { href: '/', label: 'Dashboard', icon: 'speedometer2' },
+    { href: '/boxes', label: 'Box board', icon: 'table' },
+    { href: '/scan', label: 'Scan & update', icon: 'qr-code-scan' },
+    { href: '/register', label: 'Register box', icon: 'plus-square' },
+    { href: '/reorder', label: 'Reorder', icon: 'arrow-repeat' },
+    { href: '/metrics', label: 'KPIs', icon: 'graph-up-arrow' },
   ];
 
   const STAGE_ICONS = {
@@ -51,7 +47,7 @@
     return `<span class="sg-badge stock-${status}">${icon(s.icon)}${s.label}</span>`;
   }
 
-  /** KPI / summary card. tone: '', 'danger', 'warning', 'success'. */
+  
   function kpiCard({ title, value, sub = '', iconName = 'info-circle', tone = '' }) {
     return `
       <div class="card sg-kpi ${tone ? `tone-${tone}` : ''}">
@@ -80,7 +76,7 @@
     host.innerHTML = `
       <nav class="navbar navbar-expand-xl navbar-dark sg-navbar" aria-label="Main">
         <div class="container-xxl">
-          <a class="navbar-brand" href="index.html">${icon('box2-heart')} Simply Garlic <span class="fw-normal">Tracker</span></a>
+          <a class="navbar-brand" href="/">${icon('box2-heart')} Simply Garlic <span class="fw-normal">Tracker</span></a>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sg-nav-links"
             aria-controls="sg-nav-links" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
@@ -100,7 +96,7 @@
     });
   }
 
-  /** Polite screen-reader announcement. */
+  
   function announce(message) {
     let region = document.getElementById('sg-live');
     if (!region) {
@@ -115,7 +111,7 @@
     window.setTimeout(() => { region.textContent = message; }, 50);
   }
 
-  /** Visual toast (also announced). tone: success | danger | warning | info */
+  
   function toast(message, tone = 'success') {
     let wrap = document.getElementById('sg-toasts');
     if (!wrap) {
@@ -134,11 +130,7 @@
     new bootstrap.Toast(el, { delay: 5000 }).show();
   }
 
-  /**
-   * Sortable, accessible table.
-   * columns: [{ key, label, sortable=true, render(row)->html, sortValue(row), className, rowHeader }]
-   * Header buttons toggle sort; the sorted <th> gets aria-sort.
-   */
+  
   function sortableTable(container, opts) {
     const st = { rows: opts.rows || [], key: opts.sortKey || null, dir: opts.sortDir || 'asc' };
     const id = opts.id || `tbl-${Math.random().toString(36).slice(2, 8)}`;
@@ -209,7 +201,7 @@
     return { update(rows) { st.rows = rows; renderBody(); }, element: table };
   }
 
-  /** Attach Bootstrap-style validation with custom messages to a form. */
+  
   function validateForm(form, messages) {
     let firstInvalid = null;
     form.querySelectorAll('input, select, textarea').forEach((field) => {
