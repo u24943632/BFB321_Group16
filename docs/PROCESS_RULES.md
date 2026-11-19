@@ -1,8 +1,10 @@
 # Simply Garlic box tracking: process rules
 
 These rules are enforced in code by `models/tracking.py` and `models/alerts.py`.
-The browser loads the same rules from `web/assets/js/demo-data.js`, which is
-generated from the Python model. `tests/test_js_parity.py` checks that the two match.
+The browser loads the same rules from MySQL through `/api/app-data.js` (the
+seed writes them from the Python constants), and every write is checked again
+by the Python rules on the server. `tests/test_js_parity.py` checks that the
+browser and Python rules match.
 
 ## 1. Unique identity per box
 
@@ -139,5 +141,5 @@ The system claims **last confirmed scan location**, not live position:
    tracking incidents, traceability coverage, stage dwell time and labour
    utilisation as the headline results.
 
-The baseline figures in `scripts/build_demo_data.py` are **samples**. Replace
-them with the measured study.
+The baseline figures (`kpi_baselines` table, seeded from `database/seed.py`)
+are **samples**. Replace them with the measured study.
