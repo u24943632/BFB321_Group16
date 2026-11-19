@@ -152,6 +152,8 @@ flask --app app run --port 5001
 
 ## Data model and database (MySQL)
 
+![Entity relationship diagram](docs/erd.png)
+
 * **Schema:** [`database/schema.sql`](database/schema.sql) - 15 tables in
   3NF with primary/foreign keys, `NOT NULL`, `UNIQUE`, `CHECK` constraints,
   `DECIMAL` money columns, `created_at`/`updated_at` audit fields and
