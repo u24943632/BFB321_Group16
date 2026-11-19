@@ -1,12 +1,15 @@
 # Simply Garlic box tracker
 
 A web-based inventory tracking system for Simply Garlic, a South African
-vegetable-based product manufacturer. Simply Garlic's Derdepoort facility relies on a manual, paper-based labelling system with no digital record or time-based trail, causing misplaced labels and a loss of production time, which increases the risks of delayed deliveries to clients. This solution gives each box its own ID and follows through production stages while raising alerts when a box stays in a stage too long. It also reports before/after process KPIs and reorder recommendations. Demo data is used to give an idea of how this project may look in practise. 
+vegetable-based product manufacturer. Simply Garlic's Derdepoort facility relies on a manual, paper-based labelling system with no digital record or time-based trail, causing misplaced labels and a loss of production time, which increases the risks of delayed deliveries to clients. This solution gives each box its own ID and follows through production stages while raising alerts when a box stays in a stage too long. It also reports before/after process KPIs and reorder recommendations.  
 
 This was a collaborative effort of group 16:
 Grace Lushamba - u23531152
 Marcello Schmidt- u23563789
 Migal Groenewald – u24943632
+
+Task Allocation:
+Data models and database integration (B1) - Migal Groenewald
 
 ## Run it locally
 
@@ -34,9 +37,9 @@ A fresh Homebrew MySQL has user `root` with no password.
 ```bash
 cd path/to/simplyGarlicFinal
 python3 -m venv .venv
-source .venv/bin/activate      # the prompt now starts with (.venv)
+source .venv/bin/activate      
 pip install -r requirements.txt
-cp .env.example .env           # skip this if .env already exists
+cp .env.example .env          
 ```
 
 Open `.env` and set `DB_USER` / `DB_PASSWORD` to your MySQL login
@@ -54,8 +57,7 @@ flask --app app init-db
 flask --app app run --port 5001
 ```
 
-Open <http://127.0.0.1:5001>. Port 5001 is used because macOS AirPlay
-Receiver already uses port 5000. Stop the app with **Ctrl + C**.
+Open <http://127.0.0.1:5001>. Stop the app with **Ctrl + C**.
 
 **Every time after that:**
 
@@ -82,9 +84,9 @@ Use **PowerShell** (or Command Prompt where noted).
 ```powershell
 cd path\to\simplyGarlicFinal
 python -m venv .venv
-.venv\Scripts\Activate.ps1     # Command Prompt: .venv\Scripts\activate.bat
+.venv\Scripts\Activate.ps1     
 pip install -r requirements.txt
-copy .env.example .env         # skip this if .env already exists
+copy .env.example .env         
 ```
 
 If PowerShell says running scripts is disabled, run this once and try again:
