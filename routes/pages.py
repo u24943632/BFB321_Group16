@@ -10,6 +10,7 @@ PAGES = {
     "/boxes": "boxes.html",
     "/scan": "scan.html",
     "/register": "register.html",
+    "/products": "products.html",
     "/reorder": "reorder.html",
     "/metrics": "metrics.html",
 }

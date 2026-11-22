@@ -13,7 +13,15 @@
   const ROLE_KEY = 'sg-role';
 
   const stageMap = Object.fromEntries(D.stages.map((s) => [s.key, s]));
-  const productMap = Object.fromEntries(D.products.map((p) => [p.sku, p]));
+  const productMap = {};
+  const reorderMap = {};
+  function indexCatalogue() {
+    Object.keys(productMap).forEach((k) => delete productMap[k]);
+    (D.products || []).forEach((p) => { productMap[p.sku] = p; });
+    Object.keys(reorderMap).forEach((k) => delete reorderMap[k]);
+    (D.reorder || []).forEach((r) => { reorderMap[r.sku] = r; });
+  }
+  indexCatalogue();
   const locationMap = Object.fromEntries(D.locations.map((l) => [l.code, l.label]));
   const roleMap = Object.fromEntries(D.roles.map((r) => [r.key, r]));
   const incidentKindMap = Object.fromEntries(D.incident_kinds.map((k) => [k.key, k.label]));
@@ -158,22 +166,41 @@
   }
   const currentUser = () => ({ username: roleMap[getRole()].user, role: getRole() });
   const canWrite = (role) => D.floor_roles.includes(role || getRole());
+  const canRegister = (role) => (D.register_roles || []).includes(role || getRole());
+  const canManageCatalogue = (role) => (D.catalogue_roles || []).includes(role || getRole());
 
   
-  // POST JSON to the API. Resolves to the parsed body, always with ok + error.
-  async function api(path, body) {
+  // Call the Flask API. Writes (POST/PATCH/PUT) send JSON with the acting
+  // username. Resolves to the parsed body, always with ok (+ error on failure).
+  async function api(path, body, method = 'POST') {
+    const options = { method, headers: { Accept: 'application/json' } };
+    if (method !== 'GET') {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify({ ...body, username: currentUser().username });
+    }
     try {
-      const response = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...body, username: currentUser().username }),
-      });
+      const response = await fetch(path, options);
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) return { ok: false, error: data.error || `Request failed (${response.status}).` };
-      return { ok: true, ...data };
+      if (!response.ok) return { ok: false, status: response.status, error: data.error || `Request failed (${response.status}).` };
+      return { ...data, ok: true };
     } catch (e) {
       return { ok: false, error: 'Could not reach the server. Check your connection and try again.' };
     }
+  }
+  const getJson = (path) => api(path, null, 'GET');
+
+  // Re-read everything from MySQL so this screen shows changes made on other
+  // devices (e.g. a box scanned at the QC bay). Pages call this on a timer.
+  async function refresh() {
+    const fresh = await getJson('/api/app-data');
+    if (!fresh.ok) return false;
+    state.boxes = fresh.boxes;
+    state.incidents = fresh.incidents;
+    state.audit = fresh.audit;
+    ['products', 'categories', 'reorder', 'kpis', 'generated_at'].forEach((k) => { D[k] = fresh[k]; });
+    indexCatalogue();
+    document.dispatchEvent(new CustomEvent('sg:refresh'));
+    return true;
   }
 
   function upsert(list, item, key) {
@@ -206,8 +233,8 @@
   }
 
   async function closeIncident(id, { resolution, foundLocation }) {
-    const result = await api(`/api/incidents/${encodeURIComponent(id)}/close`,
-      { resolution, found_location: foundLocation || '' });
+    const result = await api(`/api/incidents/${encodeURIComponent(id)}`,
+      { status: 'closed', resolution, found_location: foundLocation || '' }, 'PATCH');
     if (!result.ok) return result;
     keepBox(result.box);
     return { ok: true, incident: keepIncident(result.incident) };
@@ -215,8 +242,35 @@
 
   // A damaged-label incident is linked to its box once the printed ID is typed in.
   async function linkIncident(id, boxId) {
-    const result = await api(`/api/incidents/${encodeURIComponent(id)}/link`, { box_id: boxId });
+    const result = await api(`/api/incidents/${encodeURIComponent(id)}`, { box_id: boxId }, 'PATCH');
     return result.ok ? { ok: true, incident: keepIncident(result.incident) } : result;
+  }
+
+  // Correct a box's batch number / quantity (reason required).
+  async function correctBox(boxId, { batch, quantity, reason }) {
+    const result = await api(`/api/boxes/${encodeURIComponent(boxId)}`,
+      { batch_no: batch, quantity, reason }, 'PATCH');
+    return result.ok ? { ok: true, box: keepBox(result.box) } : result;
+  }
+
+  async function reprintLabel(boxId, reason) {
+    const result = await api(`/api/boxes/${encodeURIComponent(boxId)}/label-reprints`, { reason });
+    return result.ok ? { ok: true, box: keepBox(result.box) } : result;
+  }
+
+  // Product catalogue and reorder policies (supervisors only; checked by the API).
+  const productPath = (sku) => `/api/products/${encodeURIComponent(sku)}`;
+  const createProduct = (product) => api('/api/products', product);
+  const updateProduct = (sku, changes) => api(productPath(sku), changes, 'PATCH');
+  const createCategory = (category) => api('/api/categories', category);
+
+  async function updateReorderPolicy(sku, changes) {
+    const result = await api(`${productPath(sku)}/reorder-policy`, changes, 'PATCH');
+    if (result.ok) {
+      upsert(D.reorder, result.plan, 'sku');
+      indexCatalogue();
+    }
+    return result;
   }
 
   function formatDuration(ms) {
@@ -237,7 +291,9 @@
     stageMap, productMap, locationMap, roleMap, incidentKindMap,
     stageOf, stageEnteredAt, stageLabel, roleLabel, isTerminal, heldFrom, dwellMs, thresholdFor,
     severity, alerts, validateTransition, nextStages, parseBoxId, checkCharacter, makeBoxId,
-    getRole, setRole, currentUser, canWrite, findBox, moveBox, registerBox, openIncident,
-    closeIncident, linkIncident, formatDuration, formatDateTime,
+    reorderMap, getRole, setRole, currentUser, canWrite, canRegister, canManageCatalogue,
+    findBox, moveBox, registerBox, openIncident, closeIncident, linkIncident, correctBox,
+    reprintLabel, createProduct, updateProduct, createCategory, updateReorderPolicy,
+    api, getJson, refresh, formatDuration, formatDateTime,
   };
 })();

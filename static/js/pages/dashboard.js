@@ -4,29 +4,46 @@
 
   SGUI.navbar('/');
 
-  function render() {
-    const now = Date.now();
-    const boxes = SG.boxes;
-    const active = boxes.filter((b) => !SG.isTerminal(SG.stageOf(b)));
-    const alerts = SG.alerts(now);
-    const critical = alerts.filter((a) => a.severity === 'critical').length;
-    const dayAgo = now - 86400000;
-    const dispatched24 = boxes.filter((b) => SG.stageOf(b) === 'dispatched' && Date.parse(SG.stageEnteredAt(b)) >= dayAgo).length;
-    const ready = boxes.filter((b) => SG.stageOf(b) === 'ready_for_dispatch').length;
-    const openInc = SG.incidents.filter((i) => !i.closed_at);
+  const rand = (v) => `R ${Math.round(v).toLocaleString('en-ZA')}`;
+  let summary = null; // live KPIs from GET /api/metrics/summary (calculated on the server)
 
-    document.getElementById('as-of').textContent = `Updated ${SG.formatDateTime(new Date(now).toISOString())}.`;
-
+  function renderCards() {
+    if (!summary) return;
+    const s = summary;
+    const tone = (bad, level) => (bad ? level : 'success');
     const cards = [
-      { title: 'Boxes in process', value: active.length, iconName: 'boxes', sub: 'Not yet dispatched or rejected' },
-      { title: 'Critical alerts', value: critical, iconName: 'exclamation-octagon', tone: critical ? 'danger' : 'success', sub: 'Over critical dwell limit' },
-      { title: 'Warnings', value: alerts.length - critical, iconName: 'exclamation-triangle', tone: alerts.length - critical ? 'warning' : 'success', sub: 'Over warning limit' },
-      { title: 'Ready for dispatch', value: ready, iconName: 'truck', sub: 'QC and packaging complete' },
-      { title: 'Dispatched (24 h)', value: dispatched24, iconName: 'check2-all', tone: 'success', sub: 'Box throughput' },
-      { title: 'Open investigations', value: openInc.length, iconName: 'search', tone: openInc.length ? 'warning' : 'success', sub: 'Misplaced, label, quality or dispatch issues' },
+      { title: 'Boxes in process', value: s.boxes_in_process, iconName: 'boxes', sub: `${s.boxes_total} boxes tracked in total` },
+      { title: 'Critical alerts', value: s.alerts_critical, iconName: 'exclamation-octagon', tone: tone(s.alerts_critical, 'danger'), sub: 'Over critical stage-time limit' },
+      { title: 'Warnings', value: s.alerts_warning, iconName: 'exclamation-triangle', tone: tone(s.alerts_warning, 'warning'), sub: 'Over warning limit' },
+      { title: 'Open investigations', value: s.open_incidents, iconName: 'search', tone: tone(s.open_incidents, 'warning'), sub: 'Misplaced, label, quality or dispatch issues' },
+      { title: 'Ready for dispatch', value: s.ready_for_dispatch, iconName: 'truck', sub: 'QC and packaging complete' },
+      { title: 'Dispatched (24 h)', value: s.dispatched_24h, iconName: 'check2-all', tone: 'success', sub: 'Box throughput' },
+      { title: 'Avg time in stage', value: `${s.mean_hours_in_current_stage.toFixed(1)} h`, iconName: 'stopwatch', sub: 'Boxes still in process' },
+      { title: 'Traceability', value: `${s.traceability_coverage_pct.toFixed(0)}%`, iconName: 'diagram-3', tone: tone(s.traceability_coverage_pct < 100, 'warning'), sub: 'Dispatched boxes with a complete stage history' },
+      { title: 'Stock value', value: rand(s.stock_value), iconName: 'cash-stack', sub: `${s.stock_on_hand_boxes} boxes on hand` },
+      { title: 'Items to reorder', value: s.items_to_reorder, iconName: 'cart-plus', tone: tone(s.items_to_reorder, 'warning'), sub: `${s.items_critical} below safety stock` },
+      { title: 'Active products', value: s.active_products, iconName: 'tags', sub: 'In the catalogue' },
     ];
     document.getElementById('kpi-cards').innerHTML = cards
-      .map((c) => `<div class="col-6 col-md-4 col-xl-2">${SGUI.kpiCard(c)}</div>`).join('');
+      .map((c) => `<div class="col-6 col-md-4 col-xl-3">${SGUI.kpiCard(c)}</div>`).join('');
+    document.getElementById('as-of').textContent = `Updated ${SG.formatDateTime(s.generated_at)}.`;
+  }
+
+  // Pull fresh data from MySQL: the box/incident lists and the KPI summary.
+  async function refresh() {
+    const [ok, result] = await Promise.all([SG.refresh(), SG.getJson('/api/metrics/summary')]);
+    if (result.ok) summary = result.summary;
+    else SGUI.toast(result.error, 'danger');
+    if (!ok && result.ok) SGUI.toast('Could not refresh the box list.', 'warning');
+    render();
+  }
+
+  function render() {
+    const now = Date.now();
+    const active = SG.boxes.filter((b) => !SG.isTerminal(SG.stageOf(b)));
+    const alerts = SG.alerts(now);
+    const openInc = SG.incidents.filter((i) => !i.closed_at);
+    renderCards();
 
     const pipelineStages = SG.data.main_flow.filter((s) => s !== 'dispatched').concat(['on_hold']);
     document.getElementById('pipeline').innerHTML = pipelineStages.map((stage) => {
@@ -67,7 +84,8 @@
       : '<li class="list-group-item text-muted">All products above reorder point.</li>';
   }
 
-  render();
-  window.setInterval(render, 60000);
+  render(); // straight away from the data loaded with the page
+  refresh(); // then the server-calculated KPIs
+  window.setInterval(refresh, 30000); // live view: picks up scans made on other devices
   document.addEventListener('sg:rolechange', render);
 })();

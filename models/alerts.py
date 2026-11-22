@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from enum import IntEnum
 from typing import Iterable, Mapping, Optional
 
-from .products import get_product
+from .products import Product, get_product
 from .tracking import Box, Stage, TERMINAL_STAGES
 
 
@@ -90,22 +90,32 @@ def classify_dwell(dwell: timedelta, threshold: DwellThreshold) -> Severity:
     return Severity.OK
 
 
+def thresholds_from_rows(rows: Iterable[dict]) -> dict[Stage, DwellThreshold]:
+    """Thresholds from ``stages`` rows (``warning_minutes`` / ``critical_minutes``)."""
+    return {Stage(r["stage_code"]): DwellThreshold(timedelta(minutes=r["warning_minutes"]),
+                                                   timedelta(minutes=r["critical_minutes"]))
+            for r in rows if r["warning_minutes"] is not None}
+
+
 def threshold_for(stage: Stage, sku: str,
                   thresholds: Mapping[Stage, DwellThreshold] = DEFAULT_THRESHOLDS,
-                  perishable_factor: float = PERISHABLE_FACTOR) -> Optional[DwellThreshold]:
+                  perishable_factor: float = PERISHABLE_FACTOR,
+                  catalogue: Optional[Mapping[str, Product]] = None) -> Optional[DwellThreshold]:
     """Threshold for a stage/product, or None if the stage never alerts."""
     base = thresholds.get(Stage(stage))
     if base is None:
         return None
-    return base.scaled(perishable_factor) if get_product(sku).perishable else base
+    perishable = get_product(sku, catalogue).perishable
+    return base.scaled(perishable_factor) if perishable else base
 
 
 def evaluate_box(box: Box, now: datetime,
-                 thresholds: Mapping[Stage, DwellThreshold] = DEFAULT_THRESHOLDS) -> Optional[Alert]:
+                 thresholds: Mapping[Stage, DwellThreshold] = DEFAULT_THRESHOLDS,
+                 catalogue: Optional[Mapping[str, Product]] = None) -> Optional[Alert]:
     """Alert for one box, or None if it is within limits or finished."""
     if box.stage in TERMINAL_STAGES:
         return None
-    threshold = threshold_for(box.stage, box.sku, thresholds)
+    threshold = threshold_for(box.stage, box.sku, thresholds, catalogue=catalogue)
     if threshold is None:
         return None
     dwell = box.dwell(now)
@@ -117,7 +127,8 @@ def evaluate_box(box: Box, now: datetime,
 
 
 def evaluate_alerts(boxes: Iterable[Box], now: datetime,
-                    thresholds: Mapping[Stage, DwellThreshold] = DEFAULT_THRESHOLDS) -> list[Alert]:
+                    thresholds: Mapping[Stage, DwellThreshold] = DEFAULT_THRESHOLDS,
+                    catalogue: Optional[Mapping[str, Product]] = None) -> list[Alert]:
     """All alerts, most urgent first (critical before warning, longest dwell first)."""
-    alerts = [a for a in (evaluate_box(b, now, thresholds) for b in boxes) if a]
+    alerts = [a for a in (evaluate_box(b, now, thresholds, catalogue) for b in boxes) if a]
     return sorted(alerts, key=lambda a: (-a.severity, -a.dwell.total_seconds()))

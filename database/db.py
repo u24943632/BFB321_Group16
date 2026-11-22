@@ -16,6 +16,7 @@ CLI commands (registered by :func:`init_app`)::
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from pymysql.cursors import DictCursor
 
 SCHEMA_FILE = Path(__file__).resolve().parent / "schema.sql"
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_]{1,64}$")
+log = logging.getLogger(__name__)
 
 
 def connect(settings: dict, *, with_database: bool = True) -> pymysql.connections.Connection:
@@ -54,10 +56,32 @@ def get_db() -> pymysql.connections.Connection:
     return g.db
 
 
-def close_db(_error: BaseException | None = None) -> None:
-    """Close the request's connection (registered as an app-context teardown)."""
+def rollback_db() -> None:
+    """Roll back this request's open transaction, if any (used by the error handlers)."""
+    conn = g.get("db")
+    if conn is None:
+        return
+    try:
+        conn.rollback()
+    except pymysql.MySQLError:
+        log.warning("Rollback failed; the connection is closed at teardown.", exc_info=True)
+
+
+def close_db(error: BaseException | None = None) -> None:
+    """Close the request's connection (registered as an app-context teardown).
+
+    If the request ended with an error, anything not yet committed is rolled
+    back first, so a half-finished write is never left behind.
+    """
     conn = g.pop("db", None)
-    if conn is not None:
+    if conn is None:
+        return
+    try:
+        if error is not None:
+            conn.rollback()
+    except pymysql.MySQLError:
+        log.warning("Rollback at teardown failed.", exc_info=True)
+    finally:
         conn.close()
 
 

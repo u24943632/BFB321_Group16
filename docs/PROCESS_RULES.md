@@ -51,11 +51,25 @@ role, location, capture method, note). The full history is kept for every box.
 | Release from hold / Reject / Rework | | | ✔ | |
 | Log or close incidents, location check-in | ✔ | ✔ | ✔ | |
 | Reprint label | ✔ | | ✔ | |
+| Correct batch number / quantity (reason required) | ✔ | | ✔ | |
+| Add or change products, categories, reorder settings | | | ✔ | |
 | View dashboards, history, KPIs | ✔ | ✔ | ✔ | ✔ |
 
 Executives are read-only. In production, users sign in with their own accounts
 (no shared logins), so every audit entry can be traced to a person.
 (The demo frontend uses a role switcher instead of real sign-in.)
+
+Catalogue changes go into the same hash-chained audit trail as box moves
+(`PRODUCT_CREATE`, `PRODUCT_UPDATE`, `CATEGORY_CREATE`, `POLICY_UPDATE`),
+including refused attempts. New products are read from MySQL on every request,
+so a seasonal product can be registered on boxes as soon as it is added;
+deactivating a product stops new boxes being registered for it.
+
+**Stock on hand follows the boxes.** A registered box adds one finished box to
+the product's stock (`reorder_policies.on_hand_qty`); a dispatched or rejected
+box removes one. A supervisor can also set the figure after a stock count.
+Every change re-runs the EOQ / reorder point model, so the reorder advice is
+based on current stock.
 
 ## 4. Exception-alert thresholds
 
