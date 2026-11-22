@@ -396,6 +396,12 @@ reorder advice on the dashboard is always based on current stock.
 Database settings (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`)
 always come from the environment / `.env`, never from code.
 
+## Known Limitations
+
+- The system currently supports one active scan per box at a time — concurrent scans from multiple devices on the same box are not handled
+- QR code images are generated in memory and not persisted to disk by default
+- ABC classification thresholds (70/20/10) are hardcoded in `models.py` and can be made configurable in a future iteration
+
 ## Project layout
 
 ```
