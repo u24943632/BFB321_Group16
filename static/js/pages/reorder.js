@@ -7,10 +7,24 @@
 
   SGUI.navbar('/reorder');
 
-  SGUI.sortableTable($('plan-table'), {
+  // Totals over all products, recalculated whenever the plans change.
+  function renderStockCards() {
+    const plans = SG.data.reorder;
+    const reorder = plans.filter((r) => r.status !== 'OK').length;
+    const critical = plans.filter((r) => r.status === 'CRITICAL').length;
+    const cards = [
+      { title: 'Boxes on hand', value: num(plans.reduce((t, r) => t + r.on_hand, 0)), iconName: 'boxes', sub: `${plans.length} products` },
+      { title: 'Stock value', value: rand(plans.reduce((t, r) => t + r.stock_value, 0)), iconName: 'cash-stack', sub: 'On hand x unit cost' },
+      { title: 'Items to reorder', value: reorder, iconName: 'cart-plus', tone: reorder ? 'warning' : 'success', sub: 'At or below reorder point' },
+      { title: 'Below safety stock', value: critical, iconName: 'exclamation-octagon', tone: critical ? 'danger' : 'success', sub: 'Order now' },
+    ];
+    $('stock-cards').innerHTML = cards.map((c) => `<div class="col-6 col-lg-3">${SGUI.kpiCard(c)}</div>`).join('');
+  }
+
+  const planTable = SGUI.sortableTable($('plan-table'), {
     caption: 'Products at or below their reorder point are flagged. Select a heading to sort.',
     sortKey: 'status', sortDir: 'desc',
-    rows: SG.data.reorder.map((r) => ({ ...r, name: SG.productMap[r.sku].name })),
+    rows: SG.data.reorder,
     columns: [
       { key: 'name', label: 'Product', rowHeader: true },
       { key: 'on_hand', label: 'On hand', className: 'text-end', render: (r) => num(r.on_hand) },
@@ -22,8 +36,65 @@
       { key: 'orders_per_year', label: 'Orders / yr', className: 'text-end d-none d-lg-table-cell', render: (r) => num(r.orders_per_year, 1) },
       { key: 'total_annual_cost', label: 'Annual cost', className: 'text-end d-none d-xl-table-cell', render: (r) => rand(r.total_annual_cost) },
       { key: 'status', label: 'Status', render: (r) => SGUI.stockBadge(r.status), sortValue: (r) => STATUS_RANK[r.status] },
+      { key: 'actions', label: 'Actions', sortable: false,
+        render: (r) => (SG.canManageCatalogue()
+          ? `<button type="button" class="btn btn-sm btn-outline-primary" data-sku="${SGUI.escapeHtml(r.sku)}">Update<span class="visually-hidden"> ${SGUI.escapeHtml(r.name)}</span></button>`
+          : '') },
     ],
   });
+
+  function redraw() {
+    planTable.update(SG.data.reorder);
+    renderStockCards();
+  }
+
+  // ---- update stock on hand / model inputs (PATCH reorder-policy) -----------
+  const policyModal = new bootstrap.Modal($('policy-modal'));
+  let editingSku = null;
+  const FIELDS = { 'u-onhand': 'on_hand', 'u-demand': 'annual_demand', 'u-order': 'order_cost',
+    'u-hold': 'holding_cost', 'u-sd': 'daily_demand_std', 'u-lead': 'lead_time_days' };
+
+  $('plan-table').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-sku]');
+    if (!btn) return;
+    const plan = SG.reorderMap[btn.dataset.sku];
+    editingSku = plan.sku;
+    SGUI.resetForm($('policy-form'));
+    $('policy-modal-title').textContent = `Stock settings · ${plan.name}`;
+    Object.entries(FIELDS).forEach(([id, key]) => { $(id).value = plan[key]; });
+    policyModal.show();
+  });
+
+  $('policy-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const positive = (label) => (f) => (Number(f.value) > 0 ? '' : `${label} must be greater than zero.`);
+    const whole = (label, min) => (f) => (f.value !== '' && Number.isInteger(Number(f.value)) && Number(f.value) >= min ? '' : `${label} must be a whole number of at least ${min}.`);
+    const ok = SGUI.validateForm(e.target, {
+      'u-onhand': whole('Boxes on hand', 0), 'u-demand': whole('Annual demand', 1),
+      'u-order': positive('Order cost'), 'u-hold': positive('Holding cost'),
+      'u-sd': (f) => (f.value !== '' && Number(f.value) >= 0 ? '' : 'Standard deviation cannot be negative.'),
+      'u-lead': whole('Lead time', 1),
+    });
+    if (!ok) return;
+    const before = SG.reorderMap[editingSku];
+    const result = await SG.updateReorderPolicy(editingSku, {
+      on_hand_qty: Number($('u-onhand').value), annual_demand: Number($('u-demand').value),
+      order_cost: Number($('u-order').value), holding_cost: Number($('u-hold').value),
+      daily_demand_std: Number($('u-sd').value), lead_time_days: Number($('u-lead').value),
+    });
+    if (!result.ok) { SGUI.toast(result.error, 'danger'); return; }
+    policyModal.hide();
+    redraw();
+    const p = result.plan;
+    const changed = before.status !== p.status ? ` Status ${before.status} -> ${p.status}.` : '';
+    SGUI.toast(`${p.name}: EOQ ${num(p.eoq)} boxes, reorder point ${num(p.reorder_point)}.${changed}`,
+      p.status === 'OK' ? 'success' : 'warning');
+  });
+
+  document.addEventListener('sg:rolechange', redraw);
+  document.addEventListener('sg:refresh', redraw);
+  window.setInterval(SG.refresh, 30000); // stock moves as boxes are dispatched elsewhere
+  renderStockCards();
 
   $('calc-form').addEventListener('submit', (e) => {
     e.preventDefault();

@@ -35,9 +35,9 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterator, Mapping, Optional
 
-from .products import get_product
+from .products import Product, get_product
 
 SAST = timezone(timedelta(hours=2), "SAST")
 
@@ -164,6 +164,8 @@ HOLD_RELEASE_ROLES = frozenset({Role.SUPERVISOR})
 
 REGISTER_ROLES = frozenset({Role.OPERATOR, Role.SUPERVISOR})
 REPRINT_ROLES = frozenset({Role.OPERATOR, Role.SUPERVISOR})
+#: Who may add or change products, categories and reorder policies.
+CATALOGUE_ROLES = frozenset({Role.SUPERVISOR})
 
 
 NOTE_REQUIRED_STAGES = frozenset({Stage.ON_HOLD, Stage.REJECTED})
@@ -196,6 +198,7 @@ _ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 BOX_ID_PATTERN = re.compile(r"^SG-([A-Z]{3})-(\d{6})-(\d{4})-([0-9A-Z])$")
 BATCH_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9-]{2,19}$")
 MAX_SEQUENCE = 9999
+MAX_QUANTITY = 9999  # units per box; boxes.quantity is SMALLINT UNSIGNED
 
 
 def check_character(payload: str) -> str:
@@ -587,6 +590,22 @@ class ScanResult:
         return self.outcome in (ScanOutcome.ACCEPTED, ScanOutcome.DUPLICATE_IGNORED)
 
 
+def _clean_batch(batch_no: Optional[str]) -> str:
+    """Upper-case and validate a batch number."""
+    batch = (batch_no or "").strip().upper() if isinstance(batch_no, str) else ""
+    if not BATCH_PATTERN.match(batch):
+        raise ValidationError(
+            "Batch number must be 3-20 letters, digits or dashes, e.g. BGA-2610-A.")
+    return batch
+
+
+def _check_quantity(quantity) -> None:
+    """Quantity must be a whole number from 1 to MAX_QUANTITY (bools are not numbers here)."""
+    if (isinstance(quantity, bool) or not isinstance(quantity, int)
+            or not 1 <= quantity <= MAX_QUANTITY):
+        raise ValidationError(f"Quantity must be a whole number from 1 to {MAX_QUANTITY}.")
+
+
 class BoxTracker:
     """In-memory register of boxes, incidents and the audit trail.
 
@@ -595,14 +614,18 @@ class BoxTracker:
         min_relocation_time: if the same label is scanned at two different
             locations faster than this, a duplicate label is suspected.
         locations: valid location codes (defaults to :data:`LOCATIONS`).
+        catalogue: SKU -> Product map of products that may be registered
+            (defaults to the launch catalogue; the app passes the products table).
     """
 
     def __init__(self, clock: Optional[Callable[[], datetime]] = None,
                  min_relocation_time: timedelta = timedelta(seconds=60),
-                 locations: Optional[dict[str, str]] = None) -> None:
+                 locations: Optional[dict[str, str]] = None,
+                 catalogue: Optional[Mapping[str, Product]] = None) -> None:
         self._clock = clock or (lambda: datetime.now(SAST))
         self.min_relocation_time = min_relocation_time
         self.locations = dict(locations or LOCATIONS)
+        self.catalogue = catalogue
         self._boxes: dict[str, Box] = {}
         self._sequences: dict[tuple[str, date], int] = defaultdict(int)
         self._incidents: dict[str, Incident] = {}
@@ -679,13 +702,9 @@ class BoxTracker:
         """Create a box with a new unique ID, starting In production."""
         at = self._now(at)
         self._require_role(user, REGISTER_ROLES, "register boxes", at, "REGISTER")
-        product = get_product(sku)
-        batch = (batch_no or "").strip().upper()
-        if not BATCH_PATTERN.match(batch):
-            raise ValidationError(
-                "Batch number must be 3-20 letters, digits or dashes, e.g. BGA-2610-A.")
-        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
-            raise ValidationError("Quantity must be a whole number of at least 1.")
+        product = get_product(sku, self.catalogue)
+        batch = _clean_batch(batch_no)
+        _check_quantity(quantity)
         location = self._check_location(location)
 
         production_date = at.astimezone(SAST).date()
@@ -816,6 +835,49 @@ class BoxTracker:
         except (InvalidTransitionError, PermissionDeniedError, ValidationError) as exc:
             return ScanResult(ScanOutcome.REJECTED, str(exc), box=box)
         return ScanResult(ScanOutcome.ACCEPTED, f"{box_id} -> {to_stage.label}.", box=box)
+
+    def correct_box(self, box_id: str, user: User, reason: str, *,
+                    batch_no: Optional[str] = None, quantity: Optional[int] = None,
+                    at: Optional[datetime] = None) -> Box:
+        """Correct the batch number and/or quantity typed in at registration.
+
+        The stage history is untouched; the old and new values and the reason
+        go into the audit trail so the change stays traceable.
+        """
+        at = self._now(at)
+        box = self.get(box_id)
+        self._require_role(user, REGISTER_ROLES, "correct box details", at, "CORRECT", box.box_id)
+        if not (reason or "").strip():
+            raise ValidationError("A reason is required to correct a box.")
+        if batch_no is None and quantity is None:
+            raise ValidationError("Give a new batch number and/or quantity.")
+        changes = []
+        if batch_no is not None:
+            batch = _clean_batch(batch_no)
+            if batch != box.batch_no:
+                changes.append(f"batch {box.batch_no} -> {batch}")
+                box.batch_no = batch
+        if quantity is not None:
+            _check_quantity(quantity)
+            if quantity != box.quantity:
+                changes.append(f"qty {box.quantity} -> {quantity}")
+                box.quantity = quantity
+        if not changes:
+            raise ValidationError("The new values are the same as the current ones.")
+        self.audit.record(at=at, user=user, action="CORRECT", box_id=box.box_id,
+                          detail=f"{', '.join(changes)}: {reason.strip()}")
+        return box
+
+    def record_catalogue_change(self, user: User, action: str, detail: str, *,
+                                at: Optional[datetime] = None) -> None:
+        """Check that ``user`` may change the catalogue, then audit the change.
+
+        Call this *before* writing the change, so a refused attempt is
+        audited and nothing is written.
+        """
+        at = self._now(at)
+        self._require_role(user, CATALOGUE_ROLES, "change the product catalogue", at, action)
+        self.audit.record(at=at, user=user, action=action, detail=detail)
 
     def reprint_label(self, box_id: str, user: User, reason: str, *,
                       at: Optional[datetime] = None) -> Box:

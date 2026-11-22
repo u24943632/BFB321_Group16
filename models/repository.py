@@ -49,6 +49,35 @@ def _execute(conn, sql: str, params: tuple = ()) -> int:
         return cur.execute(sql, params)
 
 
+def _where(conditions: list[tuple[str, tuple]]) -> tuple[str, tuple]:
+    """Join ``(sql_fragment, params)`` filter pairs into a WHERE clause.
+
+    The SQL fragments are fixed strings written in this module; only the
+    params come from the request, and they are always sent as placeholders.
+    """
+    if not conditions:
+        return "", ()
+    sql = " WHERE " + " AND ".join(fragment for fragment, _ in conditions)
+    params = tuple(p for _, values in conditions for p in values)
+    return sql, params
+
+
+def _like(text: str) -> str:
+    """``%text%`` pattern for LIKE, with the wildcards % and _ in ``text`` escaped."""
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _paged(conn, select_sql: str, count_sql: str, where: tuple[str, tuple], order_by: str,
+           limit: int, offset: int) -> tuple[list[dict], int]:
+    """Run a filtered list query and its COUNT(*) with the same WHERE clause."""
+    where_sql, params = where
+    total = _fetch_all(conn, count_sql + where_sql, params)[0]["total"]
+    rows = _fetch_all(conn, f"{select_sql}{where_sql} ORDER BY {order_by} LIMIT %s OFFSET %s",
+                      params + (limit, offset))
+    return rows, total
+
+
 # ---------------------------------------------------------------------------
 # Lookup tables: product_categories, products, roles, users, locations,
 # stages, stage_permissions, incident_kinds
@@ -62,6 +91,84 @@ def fetch_products(conn) -> list[dict]:
           FROM products p
           JOIN product_categories c ON c.category_id = p.category_id
          ORDER BY p.product_id""")
+
+
+_PRODUCT_SELECT = """
+        SELECT p.product_id, p.sku, p.product_name, p.unit_cost, p.is_active,
+               p.created_at, p.updated_at, c.category_name, c.is_perishable
+          FROM products p
+          JOIN product_categories c ON c.category_id = p.category_id"""
+
+
+def fetch_product(conn, sku: str) -> Optional[dict]:
+    """One product with its category, or None."""
+    rows = _fetch_all(conn, _PRODUCT_SELECT + " WHERE p.sku = %s", (sku,))
+    return rows[0] if rows else None
+
+
+def query_products(conn, *, category: Optional[str] = None, active: Optional[bool] = None,
+                   search: Optional[str] = None, limit: int = 20,
+                   offset: int = 0) -> tuple[list[dict], int]:
+    """Products filtered by category name, active flag and name/SKU text, one page."""
+    conditions = []
+    if category:
+        conditions.append(("c.category_name = %s", (category,)))
+    if active is not None:
+        conditions.append(("p.is_active = %s", (active,)))
+    if search:
+        like = _like(search)
+        conditions.append(("(p.sku LIKE %s OR p.product_name LIKE %s)", (like, like)))
+    count_sql = """SELECT COUNT(*) AS total FROM products p
+                     JOIN product_categories c ON c.category_id = p.category_id"""
+    return _paged(conn, _PRODUCT_SELECT, count_sql, _where(conditions), "p.sku",
+                  limit, offset)
+
+
+def insert_product(conn, *, sku: str, name: str, category_id: int, unit_cost) -> None:
+    _execute(conn, """
+        INSERT INTO products (sku, product_name, category_id, unit_cost)
+        VALUES (%s, %s, %s, %s)""", (sku, name, category_id, unit_cost))
+
+
+# API field name -> products column. Only these columns can be updated.
+PRODUCT_UPDATE_COLUMNS = {"name": "product_name", "category_id": "category_id",
+                          "unit_cost": "unit_cost", "is_active": "is_active"}
+
+
+def update_product(conn, sku: str, changes: dict) -> None:
+    """Update the given fields (keys of PRODUCT_UPDATE_COLUMNS) of one product."""
+    columns = [(PRODUCT_UPDATE_COLUMNS[key], value) for key, value in changes.items()]
+    if not columns:
+        return
+    set_sql = ", ".join(f"{column} = %s" for column, _ in columns)
+    _execute(conn, f"UPDATE products SET {set_sql} WHERE sku = %s",
+             tuple(value for _, value in columns) + (sku,))
+
+
+def fetch_categories(conn) -> list[dict]:
+    """Categories with how many products use each."""
+    return _fetch_all(conn, """
+        SELECT c.category_id, c.category_name, c.is_perishable, COUNT(p.product_id) AS products
+          FROM product_categories c
+          LEFT JOIN products p ON p.category_id = c.category_id
+         GROUP BY c.category_id, c.category_name, c.is_perishable
+         ORDER BY c.category_name""")
+
+
+def find_category(conn, name: str) -> Optional[dict]:
+    """Category by name (case-insensitive through the column collation), or None."""
+    rows = _fetch_all(conn, """
+        SELECT category_id, category_name, is_perishable
+          FROM product_categories WHERE category_name = %s""", (name,))
+    return rows[0] if rows else None
+
+
+def insert_category(conn, name: str, is_perishable: bool) -> int:
+    """Insert a category and return its new category_id."""
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO product_categories (category_name, is_perishable) "
+                    "VALUES (%s, %s)", (name, is_perishable))
+        return cur.lastrowid
 
 
 def fetch_roles(conn) -> list[dict]:
@@ -189,14 +296,61 @@ def insert_box(conn, box: Box, registered_by: int) -> None:
 
 
 def update_box_state(conn, box: Box) -> None:
-    """Save a box's current stage, location and label version."""
+    """Save a box's current stage, location, label version, batch and quantity."""
     _execute(conn, """
         UPDATE boxes
            SET current_stage_code = %s, current_location_code = %s,
-               location_updated_at = %s, label_version = %s
+               location_updated_at = %s, label_version = %s, batch_no = %s, quantity = %s
          WHERE box_id = %s""",
         (box.stage.value, box.location, to_db_time(box.location_updated_at),
-         box.label_version, box.box_id))
+         box.label_version, box.batch_no, box.quantity, box.box_id))
+
+
+# ``sort`` request value -> ORDER BY clause for query_boxes (fixed strings only).
+BOX_SORTS = {
+    "newest": "b.created_at DESC, b.box_id DESC",
+    "oldest": "b.created_at ASC, b.box_id ASC",
+    "box_id": "b.box_id ASC",
+    "longest_in_stage": "stage_entered_at ASC, b.box_id ASC",
+}
+
+
+def query_boxes(conn, *, stage: Optional[str] = None, sku: Optional[str] = None,
+                location: Optional[str] = None, batch_no: Optional[str] = None,
+                search: Optional[str] = None, in_process: Optional[bool] = None,
+                sort: str = "newest", limit: int = 20,
+                offset: int = 0) -> tuple[list[dict], int]:
+    """Box summaries (no history) filtered and paged in SQL.
+
+    ``in_process`` True keeps boxes that are not dispatched or rejected;
+    ``stage_entered_at`` is the time of the box's latest status event.
+    """
+    conditions = []
+    if stage:
+        conditions.append(("b.current_stage_code = %s", (stage,)))
+    if sku:
+        conditions.append(("p.sku = %s", (sku,)))
+    if location:
+        conditions.append(("b.current_location_code = %s", (location,)))
+    if batch_no:
+        conditions.append(("b.batch_no = %s", (batch_no,)))
+    if search:
+        like = _like(search)
+        conditions.append(("(b.box_id LIKE %s OR b.batch_no LIKE %s)", (like, like)))
+    if in_process is not None:
+        conditions.append(("s.is_terminal = %s", (not in_process,)))
+    joins = """
+          FROM boxes b
+          JOIN products p ON p.product_id = b.product_id
+          JOIN stages s ON s.stage_code = b.current_stage_code"""
+    select_sql = """
+        SELECT b.box_id, p.sku, p.product_name, b.batch_no, b.quantity,
+               b.current_stage_code, s.stage_label, b.current_location_code,
+               b.location_updated_at, b.label_version, b.created_at,
+               (SELECT MAX(e.occurred_at) FROM status_events e
+                 WHERE e.box_id = b.box_id) AS stage_entered_at""" + joins
+    return _paged(conn, select_sql, "SELECT COUNT(*) AS total" + joins, _where(conditions),
+                  BOX_SORTS[sort], limit, offset)
 
 
 def insert_status_event(conn, event: StatusEvent, user_id: int) -> None:
@@ -233,6 +387,32 @@ def fetch_incidents(conn) -> list[Incident]:
         closed_by=row["closed_by_username"],
         resolution=row["resolution"],
     ) for row in rows]
+
+
+def query_incidents(conn, *, status: Optional[str] = None, kind: Optional[str] = None,
+                    box_id: Optional[str] = None, limit: int = 20,
+                    offset: int = 0) -> tuple[list[dict], int]:
+    """Incidents filtered by status ('open'/'closed'), kind and box, newest first."""
+    conditions = []
+    if status == "open":
+        conditions.append(("i.closed_at IS NULL", ()))
+    elif status == "closed":
+        conditions.append(("i.closed_at IS NOT NULL", ()))
+    if kind:
+        conditions.append(("i.kind_code = %s", (kind,)))
+    if box_id:
+        conditions.append(("i.box_id = %s", (box_id,)))
+    joins = """
+          FROM incidents i
+          JOIN incident_kinds k ON k.kind_code = i.kind_code
+          JOIN users opener ON opener.user_id = i.opened_by
+          LEFT JOIN users closer ON closer.user_id = i.closed_by"""
+    select_sql = """
+        SELECT i.incident_id, i.kind_code, k.kind_label, i.box_id, i.note, i.opened_at,
+               opener.username AS opened_by_username, i.closed_at,
+               closer.username AS closed_by_username, i.resolution""" + joins
+    return _paged(conn, select_sql, "SELECT COUNT(*) AS total" + joins, _where(conditions),
+                  "i.opened_at DESC, i.incident_id DESC", limit, offset)
 
 
 def insert_incident(conn, incident: Incident, user_ids: dict[str, int]) -> None:
@@ -304,15 +484,55 @@ def insert_audit_entry(conn, entry: AuditEntry, user_id: int) -> None:
 # reorder_policies, kpi_baselines, pilot_periods
 # ---------------------------------------------------------------------------
 
-def fetch_reorder_policies(conn) -> list[dict]:
-    """Reorder inputs per product (reorder_policies JOIN products)."""
+def fetch_reorder_policies(conn, sku: Optional[str] = None) -> list[dict]:
+    """Reorder inputs per product (reorder_policies JOIN products), optionally one SKU."""
+    where = _where([("p.sku = %s", (sku,))] if sku else [])
     return _fetch_all(conn, """
-        SELECT p.sku, p.unit_cost, r.annual_demand, r.order_cost, r.holding_cost,
-               r.daily_demand_std, r.lead_time_days, r.on_hand_qty, r.service_level,
-               r.working_days
+        SELECT p.sku, p.product_name, p.is_active, p.unit_cost, r.annual_demand, r.order_cost,
+               r.holding_cost, r.daily_demand_std, r.lead_time_days, r.on_hand_qty,
+               r.service_level, r.working_days, r.updated_at
           FROM reorder_policies r
+          JOIN products p ON p.product_id = r.product_id""" + where[0] + """
+         ORDER BY p.product_id""", where[1])
+
+
+# Columns of reorder_policies that the API may set.
+REORDER_POLICY_COLUMNS = ("annual_demand", "order_cost", "holding_cost", "daily_demand_std",
+                          "lead_time_days", "on_hand_qty", "service_level", "working_days")
+
+
+def save_reorder_policy(conn, sku: str, values: dict) -> None:
+    """Insert or replace the reorder policy of one product.
+
+    ``values`` must hold every column in REORDER_POLICY_COLUMNS.
+    """
+    params = tuple(values[c] for c in REORDER_POLICY_COLUMNS)
+    if fetch_reorder_policies(conn, sku):
+        set_sql = ", ".join(f"r.{c} = %s" for c in REORDER_POLICY_COLUMNS)
+        _execute(conn, f"""
+            UPDATE reorder_policies r
+              JOIN products p ON p.product_id = r.product_id
+               SET {set_sql}
+             WHERE p.sku = %s""", params + (sku,))
+    else:
+        columns = ", ".join(REORDER_POLICY_COLUMNS)
+        placeholders = ", ".join(["%s"] * len(REORDER_POLICY_COLUMNS))
+        _execute(conn, f"""
+            INSERT INTO reorder_policies (product_id, {columns})
+            VALUES ((SELECT product_id FROM products WHERE sku = %s), {placeholders})""",
+            (sku,) + params)
+
+
+def adjust_on_hand(conn, sku: str, delta: int) -> None:
+    """Add ``delta`` boxes to a product's stock on hand (never below zero).
+
+    Products without a reorder policy are left alone.
+    """
+    _execute(conn, """
+        UPDATE reorder_policies r
           JOIN products p ON p.product_id = r.product_id
-         ORDER BY p.product_id""")
+           SET r.on_hand_qty = GREATEST(CAST(r.on_hand_qty AS SIGNED) + %s, 0)
+         WHERE p.sku = %s""", (delta, sku))
 
 
 def fetch_active_pilot(conn) -> Optional[dict]:

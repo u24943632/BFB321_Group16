@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% set page_script = "products.js" %}
+{% block title %}Products{% endblock %}
+{% block description %}Product catalogue: add seasonal products, change details and stock settings.{% endblock %}
+
+{% block content %}
+    <div class="sg-page-header d-flex flex-wrap justify-content-between align-items-end gap-2">
+      <div>
+        <h1>Product catalogue</h1>
+        <p>Seasonal products are added here, without changing the system. New products can be registered on boxes straight away.</p>
+      </div>
+      <button class="btn btn-primary" type="button" id="add-product"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add product</button>
+    </div>
+
+    <div class="alert alert-info d-none" id="catalogue-readonly" role="status">
+      Only a supervisor can add or change products. Switch role in the top bar to make changes.
+    </div>
+
+    <section class="card mb-4" aria-labelledby="filter-heading">
+      <div class="card-body">
+        <h2 id="filter-heading" class="visually-hidden">Filter products</h2>
+        <form id="product-filters" class="row g-3 align-items-end" novalidate>
+          <div class="col-12 col-md-5">
+            <label class="form-label" for="pf-search">Search name or SKU</label>
+            <input class="form-control" id="pf-search" type="search" maxlength="80" placeholder="e.g. garlic or BGA">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="pf-category">Category</label>
+            <select class="form-select" id="pf-category"><option value="">All categories</option></select>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label" for="pf-active">Status</label>
+            <select class="form-select" id="pf-active">
+              <option value="">All</option>
+              <option value="true" selected>Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-2">
+            <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-funnel" aria-hidden="true"></i> Apply</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="list-heading">
+      <div class="card-header"><h2 id="list-heading" class="h3 mb-0">Products</h2></div>
+      <div class="card-body">
+        <div id="product-table" aria-live="polite"></div>
+        <div id="product-pager" class="mt-2"></div>
+      </div>
+    </section>
+{% endblock %}
+
+{% block after_main %}
+  <div class="modal fade" id="product-modal" tabindex="-1" aria-labelledby="product-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+      <div class="modal-content">
+        <form id="product-form" novalidate>
+          <div class="modal-header">
+            <h2 class="modal-title h4" id="product-modal-title">Add product</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-4 col-md-2">
+                <label class="form-label required" for="p-sku">SKU</label>
+                <input class="form-control mono text-uppercase" id="p-sku" required pattern="[A-Za-z]{3}" maxlength="3" aria-describedby="p-sku-help p-sku-error">
+                <div class="form-text" id="p-sku-help">3 letters</div>
+                <div class="invalid-feedback" id="p-sku-error"></div>
+              </div>
+              <div class="col-8 col-md-6">
+                <label class="form-label required" for="p-name">Product name</label>
+                <input class="form-control" id="p-name" required minlength="3" maxlength="80" aria-describedby="p-name-error">
+                <div class="invalid-feedback" id="p-name-error"></div>
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label required" for="p-cost">Unit cost (R per box)</label>
+                <input class="form-control" id="p-cost" type="number" min="0" step="0.01" required aria-describedby="p-cost-error">
+                <div class="invalid-feedback" id="p-cost-error"></div>
+              </div>
+              <div class="col-6 col-md-6">
+                <label class="form-label required" for="p-category">Category</label>
+                <select class="form-select" id="p-category" required aria-describedby="p-category-help p-category-error"></select>
+                <div class="form-text" id="p-category-help">Perishable categories get tighter stage-time alerts.</div>
+                <div class="invalid-feedback" id="p-category-error"></div>
+              </div>
+              <div class="col-12 col-md-6 d-flex align-items-end" id="p-active-wrap">
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" role="switch" id="p-active">
+                  <label class="form-check-label" for="p-active">Active (boxes can be registered)</label>
+                </div>
+              </div>
+            </div>
+
+            <details class="mt-3" id="new-category">
+              <summary class="small">Category not listed? Add a new one</summary>
+              <div class="row g-2 mt-1 align-items-end">
+                <div class="col-sm-6">
+                  <label class="form-label small" for="c-name">New category name</label>
+                  <input class="form-control form-control-sm" id="c-name" minlength="3" maxlength="40" aria-describedby="c-name-error">
+                  <div class="invalid-feedback" id="c-name-error"></div>
+                </div>
+                <div class="col-sm-3">
+                  <div class="form-check mb-1">
+                    <input class="form-check-input" type="checkbox" id="c-perishable">
+                    <label class="form-check-label small" for="c-perishable">Perishable</label>
+                  </div>
+                </div>
+                <div class="col-sm-3"><button class="btn btn-sm btn-outline-primary w-100" type="button" id="c-save">Add category</button></div>
+              </div>
+            </details>
+
+            <fieldset class="mt-4" id="p-policy">
+              <legend class="h6">Stock and reorder settings <span class="small text-muted fw-normal">(used by the EOQ / reorder point model)</span></legend>
+              <div class="row g-3">
+                <div class="col-6 col-md-4">
+                  <label class="form-label required" for="p-demand">Annual demand (boxes)</label>
+                  <input class="form-control" id="p-demand" type="number" min="1" step="1" required value="1000" aria-describedby="p-demand-error">
+                  <div class="invalid-feedback" id="p-demand-error"></div>
+                </div>
+                <div class="col-6 col-md-4">
+                  <label class="form-label required" for="p-order">Order / run cost (R)</label>
+                  <input class="form-control" id="p-order" type="number" min="0.01" step="0.01" required value="600" aria-describedby="p-order-error">
+                  <div class="invalid-feedback" id="p-order-error"></div>
+                </div>
+                <div class="col-6 col-md-4">
+                  <label class="form-label required" for="p-hold">Holding cost (R / box / year)</label>
+                  <input class="form-control" id="p-hold" type="number" min="0.01" step="0.01" required value="20" aria-describedby="p-hold-error">
+                  <div class="invalid-feedback" id="p-hold-error"></div>
+                </div>
+                <div class="col-6 col-md-4">
+                  <label class="form-label required" for="p-sd">Daily demand std dev (boxes)</label>
+                  <input class="form-control" id="p-sd" type="number" min="0" step="0.1" required value="3" aria-describedby="p-sd-error">
+                  <div class="invalid-feedback" id="p-sd-error"></div>
+                </div>
+                <div class="col-6 col-md-4">
+                  <label class="form-label required" for="p-lead">Lead time (days)</label>
+                  <input class="form-control" id="p-lead" type="number" min="1" max="365" step="1" required value="5" aria-describedby="p-lead-error">
+                  <div class="invalid-feedback" id="p-lead-error"></div>
+                </div>
+                <div class="col-6 col-md-4">
+                  <label class="form-label required" for="p-onhand">Boxes on hand now</label>
+                  <input class="form-control" id="p-onhand" type="number" min="0" step="1" required value="0" aria-describedby="p-onhand-error">
+                  <div class="invalid-feedback" id="p-onhand-error"></div>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="product-submit"><i class="bi bi-check2" aria-hidden="true"></i> Save product</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}

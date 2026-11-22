@@ -7,6 +7,7 @@
     { href: '/boxes', label: 'Box board', icon: 'table' },
     { href: '/scan', label: 'Scan & update', icon: 'qr-code-scan' },
     { href: '/register', label: 'Register box', icon: 'plus-square' },
+    { href: '/products', label: 'Products', icon: 'tags' },
     { href: '/reorder', label: 'Reorder', icon: 'arrow-repeat' },
     { href: '/metrics', label: 'KPIs', icon: 'graph-up-arrow' },
   ];
@@ -219,8 +220,31 @@
     return !firstInvalid;
   }
 
+  // Previous / next controls for a paginated API list. `pagination` is the
+  // object every list endpoint returns; onPage(n) loads page n.
+  function pager(container, pagination, onPage) {
+    const { page, pages, total, has_prev: hasPrev, has_next: hasNext } = pagination;
+    container.innerHTML = `
+      <nav class="d-flex flex-wrap align-items-center gap-2" aria-label="Pages">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-page="${page - 1}" ${hasPrev ? '' : 'disabled'}>
+          ${icon('chevron-left')} Previous</button>
+        <span class="small text-muted">Page ${page} of ${pages} · ${total} result${total === 1 ? '' : 's'}</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-page="${page + 1}" ${hasNext ? '' : 'disabled'}>
+          Next ${icon('chevron-right')}</button>
+      </nav>`;
+    container.querySelectorAll('button[data-page]').forEach((btn) => {
+      btn.addEventListener('click', () => onPage(Number(btn.dataset.page)));
+    });
+  }
+
+  // Clear Bootstrap validation styling from a form after a successful submit.
+  function resetForm(form) {
+    form.reset();
+    form.querySelectorAll('.is-invalid').forEach((f) => { f.classList.remove('is-invalid'); f.removeAttribute('aria-invalid'); });
+  }
+
   window.SGUI = {
     escapeHtml, icon, stageBadge, severityBadge, stockBadge, kpiCard, navbar,
-    announce, toast, sortableTable, validateForm,
+    announce, toast, sortableTable, validateForm, pager, resetForm,
   };
 })();

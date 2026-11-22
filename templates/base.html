@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · Simply Garlic Tracker</title>
+  <meta name="description" content="{% block description %}Simply Garlic box tracker.{% endblock %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  {% block header %}<header id="sg-nav"></header>{% endblock %}
+
+  <main id="main" class="container-xxl" tabindex="-1">
+{% block content %}{% endblock %}
+  </main>
+{% block after_main %}{% endblock %}
+
+  <noscript><div class="container alert alert-warning mt-3">This tracker needs JavaScript enabled.</div></noscript>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  {% block app_scripts %}
+  {% block vendor_scripts %}{% endblock %}
+  {# Page data is read from MySQL on every load (routes/api/reports.py). #}
+  <script src="{{ url_for('reports_api.app_data_script') }}"></script>
+  <script src="{{ url_for('static', filename='js/store.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/components.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pages/' + page_script) }}"></script>
+  {% endblock %}
+</body>
+</html>

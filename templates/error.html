@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{# Friendly error page rendered by routes/errors.py. It loads no page data,
+   so it still works when the database is down. #}
+{% block title %}Error {{ status }}{% endblock %}
+{% block description %}Something went wrong.{% endblock %}
+
+{% block header %}
+<header>
+  <nav class="navbar navbar-dark sg-navbar" aria-label="Main">
+    <div class="container-xxl">
+      <a class="navbar-brand" href="/"><i class="bi bi-box2-heart" aria-hidden="true"></i> Simply Garlic <span class="fw-normal">Tracker</span></a>
+    </div>
+  </nav>
+</header>
+{% endblock %}
+
+{% block content %}
+    <div class="sg-page-header">
+      <h1>{% if status == 404 %}Page not found{% elif status >= 500 %}Something went wrong{% else %}Request not possible{% endif %}</h1>
+      <p class="text-muted">Error {{ status }}</p>
+    </div>
+    <div class="alert alert-{{ 'danger' if status >= 500 else 'warning' }}" role="alert">{{ message }}</div>
+    <a class="btn btn-primary" href="/"><i class="bi bi-speedometer2" aria-hidden="true"></i> Back to the dashboard</a>
+{% endblock %}
+
+{% block app_scripts %}{% endblock %}

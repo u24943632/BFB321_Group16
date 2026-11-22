@@ -5,7 +5,7 @@
 
   SGUI.navbar('/register');
 
-  SG.data.products.forEach((p) => $('r-sku').insertAdjacentHTML('beforeend',
+  SG.data.products.filter((p) => p.active).forEach((p) => $('r-sku').insertAdjacentHTML('beforeend',
     `<option value="${p.sku}">${esc(p.name)} (${p.sku})</option>`));
   
   const PRODUCTION = SG.data.stage_locations.in_production[0];

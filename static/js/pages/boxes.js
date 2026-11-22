@@ -126,7 +126,50 @@
 
     $('exception-form').classList.toggle('d-none', !canWrite);
     $('exception-readonly').classList.toggle('d-none', canWrite);
+
+    // Only roles that register boxes may correct them or reprint labels.
+    $('box-admin').classList.toggle('d-none', !SG.canRegister() || SG.isTerminal(stage));
+    if (!$('correct-form').contains(document.activeElement)) { // don't overwrite while typing
+      $('cb-batch').value = box.batch_no;
+      $('cb-qty').value = box.quantity;
+    }
   }
+
+  $('correct-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const box = SG.findBox(currentBoxId);
+    const ok = SGUI.validateForm(e.target, {
+      'cb-batch': (f) => (/^[A-Za-z0-9][A-Za-z0-9-]{2,19}$/.test(f.value.trim()) ? '' : '3-20 letters, digits or dashes, e.g. BGA-2610-A.'),
+      'cb-qty': (f) => (Number.isInteger(Number(f.value)) && Number(f.value) >= 1 && Number(f.value) <= 9999 ? '' : 'A whole number from 1 to 9999.'),
+      'cb-reason': (f) => (f.value.trim().length >= 5 ? '' : 'Say why (at least 5 characters).'),
+    });
+    if (!ok) return;
+    const batch = $('cb-batch').value.trim().toUpperCase();
+    const quantity = Number($('cb-qty').value);
+    const changes = { reason: $('cb-reason').value.trim() };
+    if (batch !== box.batch_no) changes.batch = batch;
+    if (quantity !== box.quantity) changes.quantity = quantity;
+    if (!('batch' in changes) && !('quantity' in changes)) { SGUI.toast('Nothing changed.', 'info'); return; }
+    const result = await SG.correctBox(currentBoxId, changes);
+    if (!result.ok) { SGUI.toast(result.error, 'danger'); return; }
+    $('cb-reason').value = '';
+    SGUI.toast(`${currentBoxId} corrected: batch ${result.box.batch_no}, ${result.box.quantity} units.`);
+    renderModal();
+    refresh();
+  });
+
+  $('reprint-label').addEventListener('click', async () => {
+    const reason = $('cb-reason');
+    const invalid = reason.value.trim().length < 5;
+    reason.classList.toggle('is-invalid', invalid);
+    $('cb-reason-error').textContent = invalid ? 'Say why the label is reprinted (at least 5 characters).' : '';
+    if (invalid) { reason.focus(); return; }
+    const result = await SG.reprintLabel(currentBoxId, reason.value.trim());
+    if (!result.ok) { SGUI.toast(result.error, 'danger'); return; }
+    reason.value = '';
+    SGUI.toast(`Label v${result.box.label_version} for ${currentBoxId} sent to print. Destroy the old label.`);
+    renderModal();
+  });
 
   function openBox(boxId) {
     currentBoxId = boxId;
@@ -173,7 +216,9 @@
   });
 
   document.addEventListener('sg:rolechange', () => { if (currentBoxId) renderModal(); });
-  window.setInterval(refresh, 60000);
+  // Live board: re-read MySQL every 30 s so moves made on other devices show up.
+  document.addEventListener('sg:refresh', refresh);
+  window.setInterval(SG.refresh, 30000);
   refresh();
 
   if (params.get('box')) {
