@@ -10,10 +10,13 @@ Migal Groenewald – u24943632
 
 Task Allocation:
 Data models and database integration (B1) - Migal Groenewald
+REST API design and Endpoint Definition (B2) - Marcello Schmidt
+Integration and Core Features (B3) - Grace Lushamba
+B6 and B7 done by all.
 
 ## Run it locally
 
-You need **Python 3.10+** and **MySQL 8.0.16+** (for CHECK constraints), plus
+You need **Python 3.10+** and **MySQL 8.0.16+**, plus
 an internet connection to load Bootstrap from its CDN. Node.js is optional and
 only used for the browser/Python parity test.
 
@@ -95,7 +98,7 @@ If PowerShell says running scripts is disabled, run this once and try again:
 Open `.env` in Notepad and set `DB_USER=root` and `DB_PASSWORD=` to the root
 password you chose in the MySQL installer.
 
-**3. Create the database, all tables and the seed data (one command).**
+**3. Create the database, all tables and the seed data.**
 
 ```powershell
 flask --app app init-db
@@ -123,7 +126,7 @@ flask --app app run --port 5001
   environment active). The MySQL tests build a separate `<DB_NAME>_test`
   database and are skipped if MySQL is not reachable.
 * **Fresh demo data:** run `flask --app app init-db` again. It drops and
-  rebuilds every table. Seed data is timed relative to now, so stage-dwell
+  rebuilds every table. Seed data is timed relative to your current time, so stage-dwell
   alerts look realistic right after seeding and grow as real time passes;
   reseed just before a demo.
 * **Do not commit `.env`.** It holds your own passwords and is ignored by
